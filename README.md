@@ -13,5 +13,5 @@ rsync -av mpik:/lfs/l3/gerda/pertoldi/gerda/gerda-fitter/data/*v07.00.root
 Download from mpik
 
 ```
-rsync -avrz --exclude edep mpik:/lfs/l3/gerda/sturm/gerda/gerda-pdfs/releases/ph2p-ar39
+rsync -avrz --copy-links --exclude edep mpik:/lfs/l3/gerda/sturm/gerda/gerda-pdfs/releases/ph2p-ar39
 ```
