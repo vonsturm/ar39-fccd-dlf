@@ -9,7 +9,7 @@ double emin = 45;
 double emax = 150;
 
 //bool pvalue = true;
-bool pvalue = false;
+bool pvalue = true;
 bool draw_contour = true;
 
 pair<double,double> get_chi2(std::string histname, std::string cycle, TH1D * data);
@@ -64,13 +64,13 @@ void chisquare_ar39() {
 
     int N = 0;
 
-    for (int tl = 0; tl <= 9; tl++) {
-      for (int dl = 500; dl <= 2500; dl+=100) {
-        string cycle = Form("nplus-dl%ium-tl%02d", dl, tl);
+    for (int tl = 0; tl <= 10; tl++) {
+      for (int dl = 450; dl <= 3000; dl+=50) {
+        string cycle = Form("nplus-fccd%ium-dlf%02d", dl, tl);
         pair<double,double> chi2_int = get_chi2(Form("raw/M1_ch%i",c), cycle, v_data->at(c));
         double chi2     = chi2_int.first;
         double integral = chi2_int.second;
-        if (chi2>0) {
+        if (chi2>=0) {
           gr->SetPoint(N++, dl, tl*0.1, chi2);
           if ( ((chi2 < v_min_chi2.at(c)) && !pvalue) || // chi2 min
                ((chi2 > v_min_chi2.at(c)) &&  pvalue) ) {  // pvalue max
@@ -215,8 +215,6 @@ pair<double,double> get_chi2(std::string histname, std::string cycle, TH1D * dat
   // scale to Ar39 activity in Bq/kg
   // I(data)/I(MC) * P / LT / M_LAr
   integral *= 3.e11 / 37032160. / 1082.65;
-
-  fin.Close();
 
   // return maximum
   return pair<double,double>(chi2,integral);
