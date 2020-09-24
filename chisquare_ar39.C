@@ -9,8 +9,9 @@ double emin = 45;
 double emax = 150;
 
 //bool pvalue = true;
-bool pvalue = true;
+bool pvalue = false;
 bool draw_contour = true;
+bool chi2_offset = true;
 
 pair<double,double> get_chi2(std::string histname, std::string cycle, TH1D * data);
 void write_to_json(vector<string> detnames, vector<double> best_DL, vector<double> best_fDL, string ofname);
@@ -30,7 +31,7 @@ void chisquare_ar39() {
   vector<string> v_detnames(nchan);
   vector<double> v_minpos_DL(nchan);
   vector<double> v_minpos_fDL(nchan);
-  vector<double> v_min_chi2(nchan, (pvalue ? 0. : 10000.));
+  vector<double> v_min_chi2(nchan, (pvalue ? -1. : 1.e124));
   vector<double> v_min_integral(nchan, 0.);
   vector<double> v_chan(nchan);
   for (int c = 0; c < nchan; c++) {
@@ -53,8 +54,9 @@ void chisquare_ar39() {
     TCanvas * can = new TCanvas(Form("can_ch%i",c), Form("can_ch%i",c), 1000, 700);
     TGraph2D * gr = new TGraph2D();
     gr->SetName(Form("gr_ch%i",c));
-    if (pvalue) gr->SetTitle(Form("%s ch%i; FCCD [#mum]; DLF; p-value",v_data->at(c)->GetTitle(),c));
-    else        gr->SetTitle(Form("%s ch%i; FCCD [#mum]; DLF; #Delta#chi^{2}",v_data->at(c)->GetTitle(),c));
+    if (pvalue)           gr->SetTitle(Form("%s ch%i; FCCD [#mum]; DLF; p-value",v_data->at(c)->GetTitle(),c));
+    else if (chi2_offset) gr->SetTitle(Form("%s ch%i; FCCD [#mum]; DLF; #Delta#chi^{2}",v_data->at(c)->GetTitle(),c));
+    else                  gr->SetTitle(Form("%s ch%i; FCCD [#mum]; DLF; #chi^{2}",v_data->at(c)->GetTitle(),c));
 
     string dn = v_data->at(c)->GetTitle();
     int start = dn.find("(")+1;
@@ -64,26 +66,26 @@ void chisquare_ar39() {
 
     int N = 0;
 
-    for (int tl = 0; tl <= 10; tl++) {
-      for (int dl = 450; dl <= 3000; dl+=50) {
-        string cycle = Form("nplus-fccd%ium-dlf%02d", dl, tl);
+    for (int dlf = 0; dlf <= 95; dlf+=5) {
+      for (int fccd = 450; fccd <= 3000; fccd+=50) {
+        string cycle = Form("nplus-fccd%ium-dlf%03d", fccd, dlf);
         pair<double,double> chi2_int = get_chi2(Form("raw/M1_ch%i",c), cycle, v_data->at(c));
         double chi2     = chi2_int.first;
         double integral = chi2_int.second;
         if (chi2>=0) {
-          gr->SetPoint(N++, dl, tl*0.1, chi2);
+          gr->SetPoint(N++, fccd, dlf*0.1, chi2);
           if ( ((chi2 < v_min_chi2.at(c)) && !pvalue) || // chi2 min
                ((chi2 > v_min_chi2.at(c)) &&  pvalue) ) {  // pvalue max
             v_min_chi2    .at(c) = chi2;
-            v_minpos_DL   .at(c) = dl;
-            v_minpos_fDL  .at(c) = tl*0.1;
+            v_minpos_DL   .at(c) = fccd;
+            v_minpos_fDL  .at(c) = dlf*0.1;
             v_min_integral.at(c) = integral;
           }
         }
       }
     }
 
-    if (!pvalue) {
+    if (!pvalue && chi2_offset) {
       double offset = gr->GetZmin();
 
       for (int p = 0; p < gr->GetN(); p++) {
@@ -92,7 +94,7 @@ void chisquare_ar39() {
         gr->SetPoint(p, x, y, z-offset);
 	  }
     }
-    else {
+    else if (pvalue) {
       gr->SetMinimum(0);
       gr->SetMaximum(1);
     }
@@ -105,7 +107,7 @@ void chisquare_ar39() {
     if (!pvalue) gPad->SetLogz();
     else gr->GetZaxis()->SetRangeUser(0,1);
 
-    TList* lc = gr->GetContourList(pvalue ? 0.1 : 4.6);
+    TList* lc = gr->GetContourList(pvalue ? 0.1 : (chi2_offset ? 4.6 : 102));
 
 	if (lc) {
 	if (!(lc->First() == NULL)) {
