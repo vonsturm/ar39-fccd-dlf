@@ -13,5 +13,7 @@
   "ranges" : {
     "emin" : { "min" : 40,  "max" : 60,  "delta" : 5  },
     "emax" : { "min" : 140, "max" : 200, "delta" : 20 }
-  }
+  },
+  "rebin" : 1,
+  "number-of-toys" : 10000
 }
