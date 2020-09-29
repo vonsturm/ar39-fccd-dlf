@@ -5,7 +5,7 @@
 #
 # needs root compiled with -std=c++17
 
-CXX = g++ -Wall -O3
+CXX = g++ -Wall -O3 -Wno-comments
 CXXFLAGS = $(shell root-config --cflags) -I.
 LIBS = $(shell root-config --libs) -lMinuit -ltbb
 
