@@ -14,7 +14,7 @@ EXE = ar39stat
 all: $(EXE)
 
 ar39stat: ar39stat.cxx args_reader.cxx arbitrary_sampler.cxx
-	$(CXX) $(CXXFLAGS) $< $(LIBS) -o $@
+	$(CXX) $(CXXFLAGS) $(LIBS) $< -o $@
 
 clean:
 	rm -rf $(EXE)

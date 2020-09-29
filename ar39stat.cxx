@@ -39,18 +39,14 @@ using namespace nlohmann;
 
 // dead layer model
 struct dlm_t {
+  int ID;
   int fccd;
   double dlf;
   TH1D * hist;
   std::vector<std::vector<double>> chi2;
-  std::vector<double> pV68;
-  std::vector<double> pV90;
-  std::vector<double> pV95;
-  
-  dlm_t(int fccd, double dlf, std::vector<std::vector<double>> chi2,
-    std::vector<double> pV68, std::vector<double> pV90, std::vector<double> pV95) 
-    : fccd(fccd), dlf(dlf), hist(nullptr), chi2(chi2),
-      pV68(pV68), pV90(pV90), pV95(pV95) {}
+
+  dlm_t(int ID, int fccd, double dlf, std::vector<std::vector<double>> chi2) 
+    : ID(ID), fccd(fccd), dlf(dlf), hist(nullptr), chi2(chi2) {}
 };
 
 // energy range
@@ -120,7 +116,7 @@ int main(int argc, char* argv[]) {
   if (help) {usage(); return 1;}
 
   fetch_arg(args, "-v",     verbose);
-  bool found = fetch_arg(args, "--json", conf   );
+  bool found = fetch_arg(args, "--json", conf);
 
   if (found) {
     std::ifstream f_conf(conf);
@@ -156,13 +152,11 @@ int main(int argc, char* argv[]) {
     else ranges.emplace_back(0,Emin,Emax);
 
     if (j_conf.contains("models")) {
+      int ID = 0;
       for (auto f : j_conf["models"]["fccd"]) {
         for (auto d : j_conf["models"]["dlf"]) {
-          models.emplace_back(fccd+f.get<int>(), dlf+d.get<double>(),
-            std::vector<std::vector<double>>(ranges.size(), std::vector<double>(toys)), // chi2
-            std::vector<double>(ranges.size()),  // pV68
-            std::vector<double>(ranges.size()),  // pV90
-            std::vector<double>(ranges.size())); // pV95
+          models.emplace_back(ID++, fccd+f.get<int>(), dlf+d.get<double>(),
+            std::vector<std::vector<double>>(ranges.size(), std::vector<double>(toys))); // chi
         }
       }
     }
@@ -222,12 +216,13 @@ int main(int argc, char* argv[]) {
   // -------------------------------------------------------------------
   // now do the thing
   // -------------------------------------------------------------------
-  TFile * fin = new TFile(get_filename(fccd, dlf).c_str());
-  if (fin->IsZombie() or !fin->IsOpen()) {
+  TFile fin(get_filename(fccd, dlf).c_str());
+  if (fin.IsZombie() or !fin.IsOpen()) {
     std::cout << "Could not open file: " << get_filename(fccd, dlf).c_str() << std::endl;
     return 1;
   }
-  TH1D * M1_data = (TH1D*) fin->Get(Form("raw/M1_ch%i", channel));
+  TH1D * M1_data = (TH1D*) fin.Get(Form("raw/M1_ch%i", channel));
+  fin.Close();
   if (!M1_data) {
     std::cout << "Histogram not found: " << Form("raw/M1_ch%i", channel) << std::endl;
     return 1;
@@ -258,65 +253,33 @@ int main(int argc, char* argv[]) {
     }
 
     delete M1_toy; M1_toy = nullptr;
-    std::cout << std::endl;
   }
-  return 0;
-  
+  std::cout << "\n";
+
   // model histograms are not needed anymore at this point
   for (auto && m : models) {
     delete m.hist; m.hist = nullptr;
   }
-
-  
-  // fill all chi2 distributions in histograms
-  TH1D chi2_dist("chi2_dist","chi2_dist",500,0,500);
-
-  for (auto && m : models) {
-    for (auto r : ranges) {
-      chi2_dist.Reset();
-      for (int i = 0; i < toys; i++) {
-        chi2_dist.Fill(m.chi2.at(r.ID).at(i));
-      }
-      chi2_dist.Scale(1./chi2_dist.Integral());
-      TH1D * chi2_cumul = (TH1D*) chi2_dist.GetCumulative();
-
-      int bin68, bin90, bin95;
-      chi2_cumul->GetBinWithContent(0.68, bin68, 0, 0, 1);
-      chi2_cumul->GetBinWithContent(0.90, bin90, 0, 0, 1);
-      chi2_cumul->GetBinWithContent(0.95, bin95, 0, 0, 1);
-
-      m.pV68.at(r.ID) = bin68;
-      m.pV90.at(r.ID) = bin90;
-      m.pV95.at(r.ID) = bin95;
-      
-      delete chi2_cumul; chi2_cumul = nullptr;
-    }
-  }
+  delete M1_data; M1_data = nullptr;
 
   // dump everything to file
   system(Form("mkdir -p %s",dir.c_str()));
   for (auto r : ranges) {
     TFile of(get_ofilename(channel,fccd,dlf,r,dir).c_str(),"RECREATE");
-    TTree * tree = new TTree(get_treename(channel,r).c_str(), get_treename(channel,r).c_str());
+    //TTree tree(get_treename(channel,r).c_str(), get_treename(channel,r).c_str());
+    TTree tree("tree", get_treename(channel,r).c_str());
+    std::vector<double> v_chi2(models.size());
+    for (auto m : models)
+      tree.Branch(Form("chi2_%i_%03d",m.fccd,(int)(m.dlf*100)), &v_chi2.at(m.ID));
 
-    for (auto m : models){
-      std::vector<double> b_chi2(stat);
-      double b_pV68 = 0, b_pV90 = 0, b_pV95 = 0;
-      tree->Branch(Form("fccd%ium_dlf%03d_chi2",m.fccd,(int)(m.dlf*100)), &b_chi2);
-      tree->Branch(Form("fccd%ium_dlf%03d_pV68",m.fccd,(int)(m.dlf*100)), &b_pV68);
-      tree->Branch(Form("fccd%ium_dlf%03d_pV90",m.fccd,(int)(m.dlf*100)), &b_pV90);
-      tree->Branch(Form("fccd%ium_dlf%03d_pV95",m.fccd,(int)(m.dlf*100)), &b_pV95);
-
-      for (int t = 0; t < toys; t++) {
-        b_chi2 = m.chi2.at(t);
-        b_pV68 = m.pV68.at(t);
-        b_pV90 = m.pV90.at(t);
-        b_pV95 = m.pV95.at(t);
-        tree->Fill();
+    for (int i=0; i<toys; i++) {
+      for (auto m : models){
+        v_chi2.at(m.ID) = m.chi2.at(r.ID).at(i);
       }
+      tree.Fill();
     }
-    tree->Write();
-    delete tree; tree = nullptr;
+
+    tree.Write();
     of.Close();
   }
 
@@ -349,7 +312,7 @@ std::string get_ofilename(int channel, int fccd, double dlf, range_t r, std::str
 
 std::string get_treename(int channel, range_t r) {
   std::string treename = "tree_ch"+std::to_string(channel)+
-    "_range"+std::to_string(r.emin)+"-"+std::to_string(r.emax);
+    "_range"+std::to_string((int)r.emin)+"_"+std::to_string((int)r.emax);
 
   return treename;
 }
