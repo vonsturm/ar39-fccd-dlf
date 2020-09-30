@@ -32,8 +32,8 @@
 #include "progressbar/progressbar.hpp"
 
 //own
-#include "args_reader.cxx"
-#include "arbitrary_sampler.cxx"
+#include "args_reader.hpp"
+#include "arbitrary_sampler.hpp"
 
 using namespace nlohmann;
 

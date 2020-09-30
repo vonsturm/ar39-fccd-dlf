@@ -6,14 +6,17 @@
 # needs root compiled with -std=c++17
 
 CXX = g++ -Wall -O3 -Wno-comments
-CXXFLAGS = $(shell root-config --cflags) -I.
+CXXFLAGS = $(shell root-config --cflags) -I./utils -I. 
 LIBS = $(shell root-config --libs) -lMinuit -ltbb
 
-EXE = ar39stat
+BINDIR = ./bin
+UTILS = $(wildcard ./utils/*.hpp)
+
+EXE = $(BINDIR)/ar39stat
 
 all: $(EXE)
 
-ar39stat: ar39stat.cxx args_reader.cxx arbitrary_sampler.cxx
+$(BINDIR)/ar39stat: ar39stat.cxx $(UTILS)
 	$(CXX) $(CXXFLAGS) $(LIBS) $< -o $@
 
 clean:

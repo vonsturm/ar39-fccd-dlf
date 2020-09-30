@@ -1,4 +1,4 @@
-#include "poisson_bands.hpp"
+#include "../utils/poisson_bands.hpp"
 
 bool bands = false;
 bool residuals = false;
@@ -29,7 +29,7 @@ void stack_hist(std::string histname, std::vector<std::string> cycles) {
     c->SetLeftMargin(0.13);
     auto leg = new TLegend(0.5, 0.75, 0.9 , 0.9);
 
-    std::string file = "gerda-data-bkgmodel-phaseIIplus-v07.00.root";
+    std::string file = "../data/gerda-data-bkgmodel-phaseIIplus-v07.00.root";
     auto tfd = TFile::Open(file.c_str());
     TH1* data = nullptr;
     if (tfd) {

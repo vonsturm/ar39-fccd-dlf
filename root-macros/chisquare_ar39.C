@@ -26,7 +26,7 @@ void chisquare_ar39() {
 
   // open file and fetch histo
 //  TFile fin("nplus-dl1500um-tl06/lar/sur_array_1/Ar39/pdf-lar-sur_array_1-Ar39.root");
-  TFile fin("gerda-data-bkgmodel-phaseIIplus-v07.00.root");
+  TFile fin("../data/gerda-data-bkgmodel-phaseIIplus-v07.00.root");
   vector<TH1D*> * v_data = new vector<TH1D*>(nchan);
   vector<string> v_detnames(nchan);
   vector<double> v_minpos_DL(nchan);
@@ -199,7 +199,7 @@ pair<double,double> get_chi2(std::string histname, std::string cycle, TH1D * dat
   double chi2 = -1., integral = -1.;
 
   // open file and fetch histo
-  TFile fin(("ph2p-ar39/"+cycle+"/lar/sur_array_1/Ar39/pdf-lar-sur_array_1-Ar39.root").c_str());
+  TFile fin(("../ph2p-ar39/"+cycle+"/lar/sur_array_1/Ar39/pdf-lar-sur_array_1-Ar39.root").c_str());
   TH1D * th = (TH1D*)fin.Get(histname.c_str());
   if (!th) return pair<double,double>(chi2,integral);
 
