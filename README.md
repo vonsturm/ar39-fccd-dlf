@@ -1,10 +1,10 @@
 
 # Ar39stat
 
-Toy Monte Carlo sampler of simulated $^{39}$Ar GERDA spectra. 
+Toy Monte Carlo sampler of simulated <sup>39</sup>Ar GERDA spectra. 
 Different `FCCD` and `DLF` models and energy ranges can be specified
-in a `.json` config file to $\chi^2$-test against the toy experiments.
-All $\chi^2$-distributions are saved to file.
+in a `.json` config file to &chi;<sup>2</sup>-test against the toy experiments.
+All &chi;<sup>2</sup>-distributions are saved to file.
 
 ## Download the code
 
@@ -30,7 +30,7 @@ cmake -Dhttp="ON"     \
       path/to/source
 ```
 
-and on the `progressbar` by `gipert` utility included as submodule to the code.
+and on the [progressbar](https://github.com/gipert/progressbar) utility by [gipert](https://github.com/gipert) included as submodule.
 
 ## Compilation 
 
@@ -39,18 +39,14 @@ A `Makefile` is present that saves the executables in `./bin`. Just invoke
 
 ## Auxillary files
 
-### Data
-
 Download from mpik
 
+Data
 ```
 rsync -av mpik:/lfs/l3/gerda/pertoldi/gerda/gerda-fitter/data/*v07.00.root
 ```
 
-### MC files
-
-Download from mpik
-
+MC files
 ```
 rsync -avrz --copy-links --exclude edep --exclude prod-settings mpik:/lfs/l3/gerda/sturm/gerda/gerda-pdfs/releases/ph2p-ar39
 ```
