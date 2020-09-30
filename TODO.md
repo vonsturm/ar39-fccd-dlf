@@ -1,0 +1,3 @@
+- catch conversion errors in `utils/args_reader.hpp`
+- make `chisquare_ar39.C` a compilabel add to Makefile
+- improve `chisquare_ar39.C`

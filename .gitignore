@@ -1,9 +1,11 @@
 
 ph2p-ar39/
 plots/
+bin/
+data/
+settings/*.json
 
 *.root
+*.pdf
 
-chi2test_best_values.json
-
-ar39stat
+root-macros/chi2test_best_values.json
