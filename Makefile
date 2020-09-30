@@ -14,10 +14,17 @@ UTILS = $(wildcard ./utils/*.hpp)
 
 EXE = $(BINDIR)/ar39stat
 
-all: $(EXE)
+all: $(BINDIR) $(EXE)
 
 $(BINDIR)/ar39stat: ar39stat.cxx $(UTILS)
 	$(CXX) $(CXXFLAGS) $(LIBS) $< -o $@
 
+$(BINDIR):
+	mkdir -p $@
+
 clean:
 	rm -rf $(EXE)
+
+dist-clean: clean
+	rm -rf $(BINDIR)
+			
