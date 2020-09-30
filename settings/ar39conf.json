@@ -16,5 +16,5 @@
   },
   "rebin" : 1,
   "number-of-toys" : 100,
-  "output-dir" : "test"
+  "output-dir" : "./output"
 }

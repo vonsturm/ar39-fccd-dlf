@@ -58,18 +58,19 @@ struct range_t {
 
 void usage() {
   std::cout << "\nChi2 test statistic sampling with Ar39 GERDA simulation\n\n";
-  std::cout << "USAGE : ./ar39-stat <options>\n\n";
+  std::cout << "USAGE : ./ar39-stat --json config.json <options>\n\n";
   std::cout << "OPTIONS :\n";
-  std::cout << "\t--json       : master config file to change the models to test against\n";
-  std::cout << "\t-c --channel : channel\n";
-  std::cout << "\t--fccd       : fccd value in um\n";
-  std::cout << "\t--dlf        : dlf value as fraction\n";
-  std::cout << "\t-s --stat    : statistics to be sampled in each toy experiment\n";
-  std::cout << "\t-h --help    : print this help text\n";
-  std::cout << "\t--emin       : minimum energy for chi2 test\n";
-  std::cout << "\t--emax       : maximum energy for chi2 test\n";
-  std::cout << "\t-b           : rebin\n";
-  std::cout << "\t-v           : more output\n\n";
+  std::cout << "\t-h --help          : print this help text\n";
+  std::cout << "\t--json <opt>       : master config file [conf.json]\n";
+  std::cout << "\t-c --channel <opt> : channel [0-40]\n";
+  std::cout << "\t--fccd <opt>       : fccd value in um [450-3000:50] must be available\n";
+  std::cout << "\t--dlf <opt>        : dlf value as fraction [0.00-1.00:0.05] must be available\n";
+  std::cout << "\t-s --stat <opt>    : statistics to be sampled in each toy experiment\n";
+  std::cout << "\t--emin <opt>       : minimum energy for chi2 test [45-100]\n";
+  std::cout << "\t--emax <opt>       : maximum energy for chi2 test [100-200]\n";
+  std::cout << "\t-t --toys <opt>    : number of toy experiments\n";
+  std::cout << "\t-b <opt>           : rebin\n";
+  std::cout << "\t-v                 : more output\n\n";
 }
 
 std::string get_filename(dlm_t model);
@@ -263,7 +264,7 @@ int main(int argc, char* argv[]) {
   delete M1_data; M1_data = nullptr;
 
   // dump everything to file
-  system(Form("mkdir -p %s",dir.c_str()));
+  if (dir!="") system(Form("mkdir -p %s",dir.c_str()));
   for (auto r : ranges) {
     TFile of(get_ofilename(channel,fccd,dlf,r,dir).c_str(),"RECREATE");
     //TTree tree(get_treename(channel,r).c_str(), get_treename(channel,r).c_str());
