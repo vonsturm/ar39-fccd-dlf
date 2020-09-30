@@ -32,6 +32,8 @@ cmake -Dhttp="ON"     \
 
 and on the [progressbar](https://github.com/gipert/progressbar) utility by [gipert](https://github.com/gipert) included as submodule.
 
+Interaction with `.json` files is done via [nlohmann/json](https://github.com/nlohmann/json). Consult the documentation for details.
+
 ## Compilation 
 
 A `Makefile` is present that saves the executables in `./bin`. Just invoke
