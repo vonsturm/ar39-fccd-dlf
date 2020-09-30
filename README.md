@@ -39,7 +39,7 @@ OPTIONS :
 	-s --stat <opt>    : statistics to be sampled in each toy experiment
 	--emin <opt>       : minimum energy for chi2 test [45-100]
 	--emax <opt>       : maximum energy for chi2 test [100-200]
-      -t --toys <opt>    : number of toy experiments
+        -t --toys <opt>    : number of toy experiments
 	-b <opt>           : rebin
 	-v                 : more output
 ```
