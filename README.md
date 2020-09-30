@@ -43,10 +43,14 @@ Download from mpik
 
 Data
 ```
+cd ar39-fccd-dlf 
+mkdir -p data
+cd data
 rsync -av mpik:/lfs/l3/gerda/pertoldi/gerda/gerda-fitter/data/*v07.00.root
 ```
 
 MC files
 ```
+cd ar39-fccd-dlf 
 rsync -avrz --copy-links --exclude edep --exclude prod-settings mpik:/lfs/l3/gerda/sturm/gerda/gerda-pdfs/releases/ph2p-ar39
 ```
