@@ -186,8 +186,8 @@ int main(int argc, char* argv[]) {
   }
 
   // resize toys vectors
-  for (auto m : models) {
-    for (auto v : m.chi2) {
+  for (auto & m : models) {
+    for (auto & v : m.chi2) {
       v.resize(toys);
     }
   }
