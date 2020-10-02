@@ -31,17 +31,17 @@ Chi2 test statistic sampling with Ar39 GERDA simulation
 USAGE : ./ar39-stat --json config.json <options>
 
 OPTIONS :
-	-h --help          : print this help text
-	--json <opt>       : master config file [conf.json]
-	-c --channel <opt> : channel [0-40]
-	--fccd <opt>       : fccd value in um [450-3000:50] must be available
-	--dlf <opt>        : dlf value as fraction [0.00-1.00:0.05] must be available
-	-s --stat <opt>    : statistics to be sampled in each toy experiment
-	--emin <opt>       : minimum energy for chi2 test [45-100]
-	--emax <opt>       : maximum energy for chi2 test [100-200]
-        -t --toys <opt>    : number of toy experiments
-	-b <opt>           : rebin
-	-v                 : more output
+    -h --help          : print this help text
+    --json <opt>       : master config file [conf.json]
+    -c --channel <opt> : channel [0-40]
+    --fccd <opt>       : fccd value in um [450-3000:50] must be available
+    --dlf <opt>        : dlf value as fraction [0.00-1.00:0.05] must be available
+    -s --stat <opt>    : statistics to be sampled in each toy experiment
+    --emin <opt>       : minimum energy for chi2 test [45-100]
+    --emax <opt>       : maximum energy for chi2 test [100-200]
+    -t --toys <opt>    : number of toy experiments
+    -b <opt>           : rebin
+    -v                 : more output
 ```
 
 Note:
