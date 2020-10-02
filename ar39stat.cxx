@@ -157,7 +157,7 @@ int main(int argc, char* argv[]) {
       for (auto f : j_conf["models"]["fccd"]) {
         for (auto d : j_conf["models"]["dlf"]) {
           models.emplace_back(ID++, fccd+f.get<int>(), dlf+d.get<double>(),
-            std::vector<std::vector<double>>(ranges.size(), std::vector<double>(toys))); // chi
+            std::vector<std::vector<double>>(ranges.size(), std::vector<double>())); // chi
         }
       }
     }
@@ -183,6 +183,13 @@ int main(int argc, char* argv[]) {
   else {
     Emin = ranges.front().emin;
     Emax = ranges.back().emax;
+  }
+
+  // resize toys vectors
+  for (auto m : models) {
+    for (auto v : m.chi2) {
+      v.resize(toys);
+    }
   }
 
   // -------------------------------------------------------------------
