@@ -45,7 +45,7 @@ struct dlm_t {
   TH1D * hist;
   std::vector<std::vector<double>> chi2;
 
-  dlm_t(int ID, int fccd, double dlf, std::vector<std::vector<double>> chi2) 
+  dlm_t(int ID, int fccd, double dlf, std::vector<std::vector<double>> chi2)
     : ID(ID), fccd(fccd), dlf(dlf), hist(nullptr), chi2(chi2) {}
 };
 
@@ -201,7 +201,7 @@ int main(int argc, char* argv[]) {
   // -------------------------------------------------------------------
   // print input parameters
   // -------------------------------------------------------------------
-  
+
   if (verbose) {
     std::cout << "Channel : " << channel << std::endl;
     std::cout << "FCCD    : " << fccd    << std::endl;
@@ -267,7 +267,6 @@ int main(int argc, char* argv[]) {
   if (dir!="") system(Form("mkdir -p %s",dir.c_str()));
   for (auto r : ranges) {
     TFile of(get_ofilename(channel,fccd,dlf,r,dir).c_str(),"RECREATE");
-    //TTree tree(get_treename(channel,r).c_str(), get_treename(channel,r).c_str());
     TTree tree("tree", get_treename(channel,r).c_str());
     std::vector<double> v_chi2(models.size());
     for (auto m : models)

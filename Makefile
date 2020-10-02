@@ -5,8 +5,8 @@
 #
 # needs root compiled with -std=c++17
 
-CXX = g++ -Wall -O3 -Wno-comments
-CXXFLAGS = $(shell root-config --cflags) -I./utils -I. 
+CXX = g++ -Wall -O3 -Wno-comments -Wno-unused-result
+CXXFLAGS = $(shell root-config --cflags) -I./utils -I.
 LIBS = $(shell root-config --libs) -lMinuit -ltbb
 
 BINDIR = ./bin
@@ -17,7 +17,7 @@ EXE = $(BINDIR)/ar39stat
 all: $(BINDIR) $(EXE)
 
 $(BINDIR)/ar39stat: ar39stat.cxx $(UTILS)
-	$(CXX) $(CXXFLAGS) $(LIBS) $< -o $@
+	$(CXX) $(CXXFLAGS) $< $(LIBS) -o $@
 
 $(BINDIR):
 	mkdir -p $@
