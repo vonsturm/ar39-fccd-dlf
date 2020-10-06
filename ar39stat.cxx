@@ -241,6 +241,7 @@ int main(int argc, char* argv[]) {
   for (auto && m : models) {
     TFile fm(get_filename(m).c_str());
     m.hist = (TH1D*) fm.Get(Form("raw/M1_ch%i", channel));
+    m.hist->Rebin(rebin);
     m.hist->SetName(Form("model_fccd%d_dlf%03d",m.fccd,(int)(dlf*100)));
     fm.Close();
   }
