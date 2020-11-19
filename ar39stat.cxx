@@ -71,7 +71,8 @@ void usage() {
   std::cout << "\t-t --toys <opt>    : number of toy experiments\n";
   std::cout << "\t-b <opt>           : rebin\n";
   std::cout << "\t-o <opt>           : output directory\n";
-  std::cout << "\t--datastat <opt>    : data statistics json file[stat_interval_Ar.json]\n";
+  std::cout << "\t--datastat <opt>   : data statistics json file[stat_interval_Ar.json]\n";
+  std::cout << "\t--test <opt>       : test statistics Chi2Test(C2T) - KolmogorovTest(KST)\n";
   std::cout << "\t-v                 : more output\n\n";
 
 }
@@ -103,6 +104,8 @@ int main(int argc, char* argv[]) {
   double Emin = 45, Emax = 150;
 
   int toys = 100;
+
+  std:: string test="Chi2Test";
 
   std::vector<dlm_t> models;
   std::vector<range_t> ranges;
@@ -178,6 +181,7 @@ int main(int argc, char* argv[]) {
   fetch_arg(args, "-t",        toys   );
   fetch_arg(args, "-b",        rebin  );
   fetch_arg(args, "-o",        dir    );
+  fetch_arg(args, "--test",     test    );
   found = fetch_arg(args, "--emin", Emin) or
           fetch_arg(args, "--emax", Emax);
 
@@ -226,15 +230,16 @@ int main(int argc, char* argv[]) {
   // -------------------------------------------------------------------
 
   if (verbose) {
-    std::cout << "Channel : " << channel << std::endl;
-    std::cout << "FCCD    : " << fccd    << std::endl;
-    std::cout << "DLF     : " << dlf     << std::endl;
-    std::cout << "stat    : " << stat    << std::endl;
-    std::cout << "toys    : " << toys    << std::endl;
-    std::cout << "binning : " << rebin << " keV" << std::endl;
-    std::cout << "emin    : " << Emin  << " keV" << std::endl;
-    std::cout << "emax    : " << Emax  << " keV" << std::endl;
-    std::cout << "output dir : " << dir << "/" << std::endl;
+    std::cout << "Channel : "        << channel << std::endl;
+    std::cout << "FCCD    : "        << fccd    << std::endl;
+    std::cout << "DLF     : "        << dlf     << std::endl;
+    std::cout << "stat    : "        << stat    << std::endl;
+    std::cout << "toys    : "        << toys    << std::endl;
+    std::cout << "binning : "        << rebin   << " keV" << std::endl;
+    std::cout << "emin    : "        << Emin    << " keV" << std::endl;
+    std::cout << "emax    : "        << Emax    << " keV" << std::endl;
+    std::cout << "output dir : "     << dir     << "/" << std::endl;
+    std::cout << "test statistics: " << test    << std::endl;
   }
 
   // -------------------------------------------------------------------
@@ -274,8 +279,8 @@ int main(int argc, char* argv[]) {
       for (auto r : ranges) {
         m.hist->GetXaxis()->SetRangeUser(r.emin,r.emax);
         M1_toy->GetXaxis()->SetRangeUser(r.emin,r.emax);
-        m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2");
-        //m.chi2.at(r.ID).at(i) = M1_toy->KolmogorovTest(m.hist);
+        if (test=="Chi2Test" || test=="C2T") m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2");
+	else if (test=="KolmogorovTest" || test=="KST") m.chi2.at(r.ID).at(i) = M1_toy->KolmogorovTest(m.hist);
       }
     }
 
