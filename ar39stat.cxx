@@ -52,7 +52,7 @@ struct dlm_t {
 // energy range
 struct range_t {
   int ID; double emin; double emax;
-  range_t(int ID, double emin, double emax) 
+  range_t(int ID, double emin, double emax)
     : ID(ID), emin(emin), emax(emax) {}
 };
 
@@ -70,7 +70,10 @@ void usage() {
   std::cout << "\t--emax <opt>       : maximum energy for chi2 test [100-200]\n";
   std::cout << "\t-t --toys <opt>    : number of toy experiments\n";
   std::cout << "\t-b <opt>           : rebin\n";
+  std::cout << "\t-o <opt>           : output directory\n";
+  std::cout << "\t--datastat <opt>    : data statistics json file[stat_interval_Ar.json]\n";
   std::cout << "\t-v                 : more output\n\n";
+
 }
 
 std::string get_filename(dlm_t model);
@@ -89,20 +92,21 @@ int main(int argc, char* argv[]) {
   bool help = false;
 
   std::string conf = "";
-  
+  std::string datastat = "";
+
   int channel = 0;
   int fccd = 1000;
   double dlf = 0.5;
-  int stat = 10000;
+  int stat = 20000;
 
   int rebin = 1;
   double Emin = 45, Emax = 150;
-  
+
   int toys = 100;
 
   std::vector<dlm_t> models;
   std::vector<range_t> ranges;
-  
+
   std::string dir = "";
 
   // -------------------------------------------------------------------
@@ -133,7 +137,7 @@ int main(int argc, char* argv[]) {
       channel = j_conf["data"].value("channel",channel);
       fccd    = j_conf["data"].value("fccd",fccd);
       dlf     = j_conf["data"].value("dlf",dlf);
-      stat    = j_conf["data"].value("stat",stat);
+      //stat    = j_conf["data"].value("stat",stat);
     }
     if (j_conf.contains("ranges")) {
       int emin_min   = j_conf["ranges"]["emin"]["min"]  .get<int>();
@@ -163,6 +167,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
+
   fetch_arg(args, "--channel", channel);
   fetch_arg(args, "-c",        channel);
   fetch_arg(args, "--fccd",    fccd   );
@@ -189,6 +194,17 @@ int main(int argc, char* argv[]) {
   for (auto & m : models) {
     for (auto & v : m.chi2) {
       v.resize(toys);
+    }
+  }
+
+  found= fetch_arg(args, "--datastat", datastat);
+
+  if (found) {
+    std::ifstream f_datastat(datastat);
+    json j_datastat; f_datastat >> j_datastat;
+    if (j_datastat.contains("stat_interval_0-8000")) {
+       stat = j_datastat["stat_interval_0-8000"].value(Form("M1_ch%i",channel),stat);
+       std::cout << Form("M1_ch%i",channel) << std::endl;
     }
   }
 
@@ -242,6 +258,7 @@ int main(int argc, char* argv[]) {
     TFile fm(get_filename(m).c_str());
     m.hist = (TH1D*) fm.Get(Form("raw/M1_ch%i", channel));
     m.hist->Rebin(rebin);
+    //add here the ratio between the integrals
     m.hist->SetName(Form("model_fccd%d_dlf%03d",m.fccd,(int)(dlf*100)));
     fm.Close();
   }
@@ -258,6 +275,7 @@ int main(int argc, char* argv[]) {
         m.hist->GetXaxis()->SetRangeUser(r.emin,r.emax);
         M1_toy->GetXaxis()->SetRangeUser(r.emin,r.emax);
         m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2");
+        //m.chi2.at(r.ID).at(i) = M1_toy->KolmogorovTest(m.hist);
       }
     }
 
@@ -298,7 +316,7 @@ std::string get_filename(int fccd, double dlf) {
   std::string name = "ph2p-ar39/nplus-fccd";
   name += std::to_string(fccd);
   name += "um-dlf";
-  name += Form("%03d", (int)(dlf*100)); 
+  name += Form("%03d", (int)(dlf*100));
   name += "/lar/sur_array_1/Ar39/pdf-lar-sur_array_1-Ar39.root";
 
   return name;
