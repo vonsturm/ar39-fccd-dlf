@@ -1,20 +1,38 @@
+#include <iostream>
+#include <fstream>
 
+#include "TH1D.h"
+#include "TGraph.h"
+#include "TLine.h"
+#include "TGraph2D.h"
+#include "TGraphErrors.h"
+#include "TFile.h"
+#include "TCanvas.h"
+#include "TStyle.h"
+#include "TError.h"
 
-#include "./json.hpp"
+#include "../utils/json.hpp"
+
 using json = nlohmann::json;
+using namespace std;
 
 int rebin = 1;
 
 double emin = 45;
-double emax = 150;
+double emax = 160;
+
+double critical = 4.61; // 90% chisquare with 2 NDF
 
 //bool pvalue = true;
 bool pvalue = false;
 bool draw_contour = true;
 bool chi2_offset = true;
 
-pair<double,double> get_chi2(std::string histname, std::string cycle, TH1D * data);
-void write_to_json(vector<string> detnames, vector<double> best_DL, vector<double> best_fDL, string ofname);
+vector<double> get_chi2(std::string histname, std::string cycle, TH1D * data);
+void write_to_json(vector<string> detnames, vector<double> best_DL, vector<double> best_fDL,
+  vector<pair<double,double>> unc_FCCD, vector<pair<double,double>> unc_DLF, string ofname);
+void write_to_csv(vector<string> detnames, vector<double> best_DL, vector<double> best_fDL,
+    vector<pair<double,double>> unc_FCCD, vector<pair<double,double>> unc_DLF);
 double GetMean(TGraph * g);
 double GetRMS(TGraph * g);
 
@@ -29,10 +47,17 @@ void chisquare_ar39() {
   TFile fin("../data/gerda-data-bkgmodel-phaseIIplus-v07.00.root");
   vector<TH1D*> * v_data = new vector<TH1D*>(nchan);
   vector<string> v_detnames(nchan);
+  //
   vector<double> v_minpos_DL(nchan);
   vector<double> v_minpos_fDL(nchan);
+  //
+  vector<pair<double,double>> v_unc_DL(nchan);  // + -
+  vector<pair<double,double>> v_unc_fDL(nchan); // + -
+  //
   vector<double> v_min_chi2(nchan, (pvalue ? -1. : 1.e124));
   vector<double> v_min_integral(nchan, 0.);
+  vector<double> v_min_unc_int(nchan, 0.);
+  vector<double> v_zeros(nchan, 0.);
   vector<double> v_chan(nchan);
   for (int c = 0; c < nchan; c++) {
     v_chan.at(c) = c;
@@ -69,9 +94,10 @@ void chisquare_ar39() {
     for (int dlf = 0; dlf <= 95; dlf+=5) {
       for (int fccd = 450; fccd <= 3000; fccd+=50) {
         string cycle = Form("nplus-fccd%ium-dlf%03d", fccd, dlf);
-        pair<double,double> chi2_int = get_chi2(Form("raw/M1_ch%i",c), cycle, v_data->at(c));
-        double chi2     = chi2_int.first;
-        double integral = chi2_int.second;
+        vector<double> chi2_int = get_chi2(Form("raw/M1_ch%i",c), cycle, v_data->at(c));
+        double chi2     = chi2_int.at(0);
+        double integral = chi2_int.at(1);
+        double unc_int  = chi2_int.at(2);
         if (chi2>=0) {
           gr->SetPoint(N++, fccd, dlf*0.1, chi2);
           if ( ((chi2 < v_min_chi2.at(c)) && !pvalue) || // chi2 min
@@ -80,10 +106,14 @@ void chisquare_ar39() {
             v_minpos_DL   .at(c) = fccd;
             v_minpos_fDL  .at(c) = dlf*0.1;
             v_min_integral.at(c) = integral;
+            v_min_unc_int .at(c) = unc_int;
           }
         }
       }
     }
+
+    pair<double,double> unc_fccd = {0,10000};
+    pair<double,double> unc_dlf  = {0,10000};
 
     if (!pvalue && chi2_offset) {
       double offset = gr->GetZmin();
@@ -92,7 +122,13 @@ void chisquare_ar39() {
         double x, y, z;
         gr->GetPoint(p, x, y, z);
         gr->SetPoint(p, x, y, z-offset);
+        if (z-offset<=critical and x > unc_fccd.first ) unc_fccd.first  = x;
+        if (z-offset<=critical and x < unc_fccd.second) unc_fccd.second = x;
+        if (z-offset<=critical and y > unc_dlf.first  ) unc_dlf.first   = y;
+        if (z-offset<=critical and y < unc_dlf.second ) unc_dlf.second  = y;
 	  }
+      v_unc_DL.at(c)  = unc_fccd;
+      v_unc_fDL.at(c) = unc_dlf;
     }
     else if (pvalue) {
       gr->SetMinimum(0);
@@ -102,8 +138,11 @@ void chisquare_ar39() {
     gStyle->SetPalette(kPastel);
 //    gStyle->SetPalette(kInvertedDarkBodyRadiator);
 //    gStyle->SetPalette(kCool);
-    gr->Draw("surf3");
-    gr->Draw("same P0");
+
+    gr->Draw("colz");
+//    gr->Draw("surf3");
+//    gr->Draw("same P0");
+
     if (!pvalue) gPad->SetLogz();
     else gr->GetZaxis()->SetRangeUser(0,1);
 
@@ -128,12 +167,19 @@ void chisquare_ar39() {
 
     outfile->cd(); can->Write();
 
-    if (pvalue) std::cout << "ch " << c << " -> max p-value " << gr->GetZmax() << endl;
-    else        std::cout << "ch " << c << " -> min Chi2 " << gr->GetZmin() << endl;
-    std::cout << "\t -> best DL " << v_minpos_DL.at(c);
-    std::cout << " -> best fDL " << v_minpos_fDL.at(c) << endl;
-    std::cout << "\t -> Ar39 activity " << v_min_integral.at(c) / 3.e11 * 37032160. * 1082.65 << " " << v_min_integral.at(c) << " Bq/kg" << endl;
+    if (pvalue)            std::cout << "ch " << c << " -> max p-value " << gr->GetZmax() << endl;
+    else if (!chi2_offset) std::cout << "ch " << c << " -> min Chi2 " << gr->GetZmin() << endl;
+    else                   std::cout << "ch " << c << endl;
+    std::cout << "\t -> best FCCD " << v_minpos_DL.at(c)
+              << " + " << v_unc_DL.at(c).first - v_minpos_DL.at(c)
+              << " - " << v_minpos_DL.at(c) - v_unc_DL.at(c).second << endl;
+    std::cout << "\t -> best fDL " << v_minpos_fDL.at(c)
+              << " + " << v_unc_fDL.at(c).first - v_minpos_fDL.at(c)
+              << " - " << v_minpos_fDL.at(c) - v_unc_fDL.at(c).second << endl;
+    std::cout << "\t -> Ar39 activity " << v_min_integral.at(c) << " +- " << v_min_unc_int.at(c) << " Bq/kg" << endl;
   }
+
+/*<< v_min_integral.at(c) / 3.e11 * 37032160. * 1082.65 << " "*/
 
   cout << "DONE channels loop" << endl;
 
@@ -152,9 +198,10 @@ void chisquare_ar39() {
 
   TCanvas * can3 = new TCanvas("Ar39","Ar39",1800,700); can3->Divide(2,1);
 
-  TGraph * gr_act = new TGraph(nchan, &v_chan[0], &v_min_integral[0]);
+  TGraphErrors * gr_act = new TGraphErrors(nchan, &v_chan[0], &v_min_integral[0], &v_zeros[0], &v_min_unc_int[0]);
   gr_act->SetTitle("Ar39 activity at best fit; channel; activity [Bq/kg]");
   gr_act->SetMarkerStyle(22); gr_act->SetMarkerSize(1); gr_act->SetMarkerColor(kMagenta+1);
+  gr_act->SetLineColor(kMagenta+1);
   gr_act->GetYaxis()->SetRangeUser(1,1.6);
   can3->cd(1); gr_act->Draw("ap");
 
@@ -184,7 +231,8 @@ void chisquare_ar39() {
   cout << "3. canvas plotted" << endl;
 
   // write values to json file
-  write_to_json(v_detnames, v_minpos_DL, v_minpos_fDL, "chi2test_best_values.json");
+  write_to_json(v_detnames, v_minpos_DL, v_minpos_fDL, v_unc_DL, v_unc_fDL, "chi2test_best_values.json");
+  write_to_csv (v_detnames, v_minpos_DL, v_minpos_fDL, v_unc_DL, v_unc_fDL);
 
   cout << "dumped everything to json" << endl;
 
@@ -194,14 +242,14 @@ void chisquare_ar39() {
   cout << "done" << endl;
 }
 
-pair<double,double> get_chi2(std::string histname, std::string cycle, TH1D * data) {
+vector<double> get_chi2(std::string histname, std::string cycle, TH1D * data) {
 
-  double chi2 = -1., integral = -1.;
+  double chi2 = -1., integral = -1., unc_int = -1.;
 
   // open file and fetch histo
   TFile fin(("../ph2p-ar39/"+cycle+"/lar/sur_array_1/Ar39/pdf-lar-sur_array_1-Ar39.root").c_str());
   TH1D * th = (TH1D*)fin.Get(histname.c_str());
-  if (!th) return pair<double,double>(chi2,integral);
+  if (!th) return vector<double>(3,-1.);
 
   // rebin
   th->Rebin(rebin);
@@ -211,43 +259,67 @@ pair<double,double> get_chi2(std::string histname, std::string cycle, TH1D * dat
   // https://root.cern.ch/doc/master/classTH1.html#a6c281eebc0c0a848e7a0d620425090a5
   if (pvalue) chi2 = data->Chi2Test(th, "UW");
   else        chi2 = data->Chi2Test(th, "UW CHI2");
-  integral = data->Integral(th->FindBin(emin), th->FindBin(emax))
-             / th->Integral(th->FindBin(emin), th->FindBin(emax));
+  double data_int = data->Integral(th->FindBin(emin), th->FindBin(emax));
+  double   th_int = th  ->Integral(th->FindBin(emin), th->FindBin(emax));
+  
+  integral = data_int / th_int;
+  unc_int = integral * sqrt(1./data_int + 1./th_int);
 
   // scale to Ar39 activity in Bq/kg
   // I(data)/I(MC) * P / LT / M_LAr
   integral *= 3.e11 / 37032160. / 1082.65;
+  unc_int  *= 3.e11 / 37032160. / 1082.65;
 
   // return maximum
-  return pair<double,double>(chi2,integral);
+  return vector<double>{chi2,integral,unc_int};
 }
 
-void write_to_json(vector<string> detnames, vector<double> best_DL, vector<double> best_fDL, string ofname) {
+void write_to_json(vector<string> detnames, vector<double> best_DL, vector<double> best_fDL,
+  vector<pair<double,double>> unc_FCCD, vector<pair<double,double>> unc_DLF, string ofname) {
 
   auto j = json::object();
   j["chi2test"] = json::object();
 
-  for (int c = 0; c < best_DL.size(); c++) {
+  for (ulong c = 0; c < best_DL.size(); c++) {
     string s = detnames.at(c);
     j["chi2test"][s] = json::object();
-    j["chi2test"][s]["fccd-nm"] = best_DL.at(c);
-    j["chi2test"][s]["dlf"] = best_fDL.at(c);
+    j["chi2test"][s]["fccd-nm"] = json::object();
+    j["chi2test"][s]["fccd-nm"]["val"]  = best_DL.at(c);
+    j["chi2test"][s]["fccd-nm"]["upos"] = unc_FCCD.at(c).first;
+    j["chi2test"][s]["fccd-nm"]["uneg"] = unc_FCCD.at(c).second;
+    j["chi2test"][s]["dlf"] = json::object();
+    j["chi2test"][s]["dlf"]["val"]  = best_fDL.at(c);
+    j["chi2test"][s]["dlf"]["upos"] = unc_DLF.at(c).first;
+    j["chi2test"][s]["dlf"]["uneg"] = unc_DLF.at(c).second;
   }
 
   // detectors without values
-  j["chi2test"]["GD02D"] = json::object();
-  j["chi2test"]["GD02D"]["fccd-nm"] = -1;
-  j["chi2test"]["GD02D"]["dlf"] = -1;
-  j["chi2test"]["ANG5"] = json::object();
-  j["chi2test"]["ANG5"]["fccd-nm"] = -1;
-  j["chi2test"]["ANG5"]["dlf"] = -1;
-  j["chi2test"]["IC48B"] = json::object();
-  j["chi2test"]["IC48B"]["fccd-nm"] = -1;
-  j["chi2test"]["IC48B"]["dlf"] = -1;
-
+  vector<string> ndef = {"GD02D", "ANG5", "IC48B"};
+  for (auto d : ndef) {
+    j["chi2test"][d] = json::object();
+    j["chi2test"][d]["fccd-nm"] = json::object();
+    j["chi2test"][d]["fccd-nm"]["val"]  = -1;
+    j["chi2test"][d]["fccd-nm"]["upos"] = 0;
+    j["chi2test"][d]["fccd-nm"]["uneg"] = 0;
+    j["chi2test"][d]["dlf"] = json::object();
+    j["chi2test"][d]["dlf"]["val"]  = -1;
+    j["chi2test"][d]["dlf"]["upos"] = 0;
+    j["chi2test"][d]["dlf"]["uneg"] = 0;
+  }
 
   std::ofstream fout(ofname);
   fout << j.dump(4);
+}
+
+void write_to_csv(vector<string> detnames, vector<double> best_DL, vector<double> best_fDL,
+  vector<pair<double,double>> unc_FCCD, vector<pair<double,double>> unc_DLF) {
+
+  for (ulong d = 0; d < detnames.size(); d++) {
+    cout << detnames.at(d) << " " << best_DL.at(d)/1e3 << " " << max(unc_FCCD.at(d).first/1e3-best_DL.at(d)/1e3,0.05) << " " 
+                                                              << max(best_DL.at(d)/1e3-unc_FCCD.at(d).second/1e3,0.05) << " "
+         << best_fDL.at(d)/10 << " " << max(unc_DLF.at(d).first/10-best_fDL.at(d)/10,0.05) << " " 
+                                     << max(best_fDL.at(d)/10-unc_DLF.at(d).second/10,0.05) << endl;
+  }
 }
 
 double GetMean(TGraph * g) {
