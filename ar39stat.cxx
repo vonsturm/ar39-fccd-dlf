@@ -72,7 +72,7 @@ void usage() {
   std::cout << "\t-b <opt>           : rebin\n";
   std::cout << "\t-o <opt>           : output directory\n";
   std::cout << "\t--datastat <opt>   : data statistics json file[stat_interval_Ar.json]\n";
-  std::cout << "\t--test <opt>       : test statistics Chi2Test(C2T) - KolmogorovTest(KST)\n";
+  std::cout << "\t--test <opt>       : test statistics (0 = delta Chi2 => default, 1 = Chi2Test, 2 = KolmogorovTest)\n";
   std::cout << "\t-v                 : more output\n\n";
 
 }
@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
 
   int toys = 100;
 
-  std:: string test="Chi2Test";
+  uint test = 0; // delta Chi2 needs implementation
 
   std::vector<dlm_t> models;
   std::vector<range_t> ranges;
@@ -140,7 +140,7 @@ int main(int argc, char* argv[]) {
       channel = j_conf["data"].value("channel",channel);
       fccd    = j_conf["data"].value("fccd",fccd);
       dlf     = j_conf["data"].value("dlf",dlf);
-      //stat    = j_conf["data"].value("stat",stat);
+      stat    = j_conf["data"].value("stat",stat);
     }
     if (j_conf.contains("ranges")) {
       int emin_min   = j_conf["ranges"]["emin"]["min"]  .get<int>();
@@ -181,7 +181,7 @@ int main(int argc, char* argv[]) {
   fetch_arg(args, "-t",        toys   );
   fetch_arg(args, "-b",        rebin  );
   fetch_arg(args, "-o",        dir    );
-  fetch_arg(args, "--test",     test    );
+  fetch_arg(args, "--test",    test   );
   found = fetch_arg(args, "--emin", Emin) or
           fetch_arg(args, "--emax", Emax);
 
@@ -201,15 +201,19 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  found= fetch_arg(args, "--datastat", datastat);
+  bool found_dstat = fetch_arg(args, "--datastat", datastat);
 
-  if (found) {
+  if (found_dstat) {
     std::ifstream f_datastat(datastat);
     json j_datastat; f_datastat >> j_datastat;
     if (j_datastat.contains("stat_interval_0-8000")) {
-       stat = j_datastat["stat_interval_0-8000"].value(Form("M1_ch%i",channel),stat);
-       std::cout << Form("M1_ch%i",channel) << std::endl;
+      std::string key = Form("M1_ch%i",channel);
+      if (j_datastat["stat_interval_0-8000"].contains(key)) {
+        stat = j_datastat["stat_interval_0-8000"][key];
+      }
+      else found_dstat = false;
     }
+    else found_dstat = false;
   }
 
   // -------------------------------------------------------------------
@@ -233,13 +237,22 @@ int main(int argc, char* argv[]) {
     std::cout << "Channel : "        << channel << std::endl;
     std::cout << "FCCD    : "        << fccd    << std::endl;
     std::cout << "DLF     : "        << dlf     << std::endl;
-    std::cout << "stat    : "        << stat    << std::endl;
+    std::cout << "stat    : "        << stat;
+    if (found_dstat) std::cout << " (matches data)";
+    std::cout << std::endl;
     std::cout << "toys    : "        << toys    << std::endl;
     std::cout << "binning : "        << rebin   << " keV" << std::endl;
     std::cout << "emin    : "        << Emin    << " keV" << std::endl;
     std::cout << "emax    : "        << Emax    << " keV" << std::endl;
     std::cout << "output dir : "     << dir     << "/" << std::endl;
-    std::cout << "test statistics: " << test    << std::endl;
+    std::cout << "test statistics: "; 
+    switch (test) {
+      case 0  : std::cout << "delta Chi2";     break;
+      case 1  : std::cout << "Chi2Test";       break;
+      case 2  : std::cout << "KolmogorovTest"; break;
+      default : std::cout << "Test statistics not implemented using default: delta Chi2"; break;
+    }
+    std::cout << std::endl;
   }
 
   // -------------------------------------------------------------------
@@ -279,9 +292,16 @@ int main(int argc, char* argv[]) {
       for (auto r : ranges) {
         m.hist->GetXaxis()->SetRangeUser(r.emin,r.emax);
         M1_toy->GetXaxis()->SetRangeUser(r.emin,r.emax);
-        if (test=="Chi2Test" || test=="C2T") m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2");
-	else if (test=="KolmogorovTest" || test=="KST") m.chi2.at(r.ID).at(i) = M1_toy->KolmogorovTest(m.hist);
+        switch (test) {
+          case 2  : m.chi2.at(r.ID).at(i) = M1_toy->KolmogorovTest(m.hist);      break;
+          default : m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2"); break;
+        }
       }
+    }
+
+    // implement delta chi2 here
+    if (test == 0 or test > 2) {
+      std::cout << "delta chi2 needs implementation" << std::endl;
     }
 
     delete M1_toy; M1_toy = nullptr;
