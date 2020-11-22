@@ -105,7 +105,8 @@ int main(int argc, char* argv[]) {
 
   int toys = 100;
 
-  uint test = 0; // delta Chi2 needs implementation
+  //uint test = 0; // delta Chi2 needs implementation
+  int test=0;
 
   std::vector<dlm_t> models;
   std::vector<range_t> ranges;
