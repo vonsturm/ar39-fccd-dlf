@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
   int stat = 20000;
 
   int rebin = 1;
-  double Emin = 45, Emax = 150;
+  double Emin = 50, Emax = 130;
 
   int toys = 100;
 
@@ -112,6 +112,10 @@ int main(int argc, char* argv[]) {
   std::vector<range_t> ranges;
 
   std::string dir = "";
+
+  double data_range=0.;
+  double dataEmin=50.;
+  double dataEmax=130.;
 
   // -------------------------------------------------------------------
   // fetch arguments
@@ -203,14 +207,13 @@ int main(int argc, char* argv[]) {
   }
 
   bool found_dstat = fetch_arg(args, "--datastat", datastat);
-
   if (found_dstat) {
     std::ifstream f_datastat(datastat);
     json j_datastat; f_datastat >> j_datastat;
-    if (j_datastat.contains("stat_interval_0-8000")) {
+    if (j_datastat.contains("stat_interval_50-130")) {
       std::string key = Form("M1_ch%i",channel);
-      if (j_datastat["stat_interval_0-8000"].contains(key)) {
-        stat = j_datastat["stat_interval_0-8000"][key];
+      if (j_datastat["stat_interval_50-130"].contains(key)) {
+        data_range = j_datastat["stat_interval_50-130"][key];
       }
       else found_dstat = false;
     }
@@ -238,9 +241,6 @@ int main(int argc, char* argv[]) {
     std::cout << "Channel : "        << channel << std::endl;
     std::cout << "FCCD    : "        << fccd    << std::endl;
     std::cout << "DLF     : "        << dlf     << std::endl;
-    std::cout << "stat    : "        << stat;
-    if (found_dstat) std::cout << " (matches data)";
-    std::cout << std::endl;
     std::cout << "toys    : "        << toys    << std::endl;
     std::cout << "binning : "        << rebin   << " keV" << std::endl;
     std::cout << "emin    : "        << Emin    << " keV" << std::endl;
@@ -254,6 +254,7 @@ int main(int argc, char* argv[]) {
       default : std::cout << "Test statistics not implemented using default: delta Chi2"; break;
     }
     std::cout << std::endl;
+    if (!found_dstat) std::cout << "stat    : " << stat << std::endl;
   }
 
   // -------------------------------------------------------------------
@@ -271,6 +272,13 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   M1_data->Rebin(rebin);
+  
+  if (found_dstat){
+    stat = data_range * M1_data->Integral() / (M1_data->Integral(M1_data->FindFixBin(dataEmin), M1_data->FindFixBin(dataEmax)));
+    if (verbose){
+      std::cout << "stat    : " << stat << " (matches data) "<< std::endl;
+    }
+  }
 
   // load model histograms
   for (auto && m : models) {
