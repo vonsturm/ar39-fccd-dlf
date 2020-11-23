@@ -99,7 +99,7 @@ int main(int argc, char* argv[]) {
   int fccd = 1000;
   double dlf = 0.5;
   int stat = 20000;
-  int data_stat = 0.;
+  int data_stat = 0;
   range_t data_range(10000, 50, 130);
 
   int rebin = 1;
@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
 
   int toys = 100;
 
-  int test = 0;
+  uint16_t test = 0;
 
   std::vector<dlm_t> models;
   std::vector<range_t> ranges;
@@ -172,7 +172,6 @@ int main(int argc, char* argv[]) {
       }
     }
   }
-
 
   fetch_arg(args, "--channel", channel);
   fetch_arg(args, "-c",        channel);
@@ -304,20 +303,29 @@ int main(int argc, char* argv[]) {
     bar.update();
     TH1D * M1_toy = sample_histo(M1_data, stat);
 
+    std::vector<double> min_chi2(ranges.size(),10000.);
+
     for (auto && m : models) {
       for (auto r : ranges) {
         m.hist->GetXaxis()->SetRangeUser(r.emin,r.emax);
         M1_toy->GetXaxis()->SetRangeUser(r.emin,r.emax);
         switch (test) {
+          case 1  : m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2"); break;
           case 2  : m.chi2.at(r.ID).at(i) = M1_toy->KolmogorovTest(m.hist);      break;
-          default : m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2"); break;
+          default : m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2");
+                    min_chi2.at(r.ID) = m.chi2.at(r.ID).at(i) < min_chi2.at(r.ID) ? m.chi2.at(r.ID).at(i) : min_chi2.at(r.ID);
+                    break;
         }
       }
     }
 
     // implement delta chi2 here
     if (test == 0 or test > 2) {
-      std::cout << "delta chi2 needs implementation" << std::endl;
+      for (auto && m : models) {
+        for (auto r : ranges) {
+          m.chi2.at(r.ID).at(i) -= min_chi2.at(r.ID);
+        }
+      }
     }
 
     delete M1_toy; M1_toy = nullptr;
