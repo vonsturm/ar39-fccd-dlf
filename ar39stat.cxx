@@ -99,23 +99,21 @@ int main(int argc, char* argv[]) {
   int fccd = 1000;
   double dlf = 0.5;
   int stat = 20000;
+  int data_stat = 0.;
+  range_t data_range(10000, 50, 130);
 
   int rebin = 1;
   double Emin = 50, Emax = 130;
 
   int toys = 100;
 
-  //uint test = 0; // delta Chi2 needs implementation
-  int test=0;
+  int test = 0;
 
   std::vector<dlm_t> models;
   std::vector<range_t> ranges;
 
   std::string dir = "";
 
-  double data_range=0.;
-  double dataEmin=50.;
-  double dataEmax=130.;
 
   // -------------------------------------------------------------------
   // fetch arguments
@@ -210,14 +208,22 @@ int main(int argc, char* argv[]) {
   if (found_dstat) {
     std::ifstream f_datastat(datastat);
     json j_datastat; f_datastat >> j_datastat;
-    if (j_datastat.contains("stat_interval_50-130")) {
+    if (j_datastat.contains("data_stat")) {
       std::string key = Form("M1_ch%i",channel);
-      if (j_datastat["stat_interval_50-130"].contains(key)) {
-        data_range = j_datastat["stat_interval_50-130"][key];
+      if (!j_datastat["data_stat"].contains(key) or 
+          !j_datastat["data_stat"].contains("range")) {
+            std::cerr << "--datastat option given but json file is missing necessary keys" << std::endl;
+            exit(EXIT_FAILURE);
       }
-      else found_dstat = false;
+      if (!j_datastat["data_stat"]["range"].contains("emin") or
+          !j_datastat["data_stat"]["range"].contains("emax")) {
+            std::cerr << "--datastat option given but json file is missing necessary keys" << std::endl;
+            exit(EXIT_FAILURE);
+      }
+      data_stat = j_datastat["data_stat"][key];
+      data_range.emin = j_datastat["range"]["emin"];
+      data_range.emax = j_datastat["range"]["emax"];
     }
-    else found_dstat = false;
   }
 
   // -------------------------------------------------------------------
@@ -271,14 +277,15 @@ int main(int argc, char* argv[]) {
     std::cout << "Histogram not found: " << Form("raw/M1_ch%i", channel) << std::endl;
     return 1;
   }
-  M1_data->Rebin(rebin);
-  
-  if (found_dstat){
-    stat = data_range * M1_data->Integral() / (M1_data->Integral(M1_data->FindFixBin(dataEmin), M1_data->FindFixBin(dataEmax)));
-    if (verbose){
+
+  if (found_dstat) {
+    stat = data_stat * M1_data->Integral() / M1_data->Integral(M1_data->FindFixBin(data_range.emin),
+                                                               M1_data->FindFixBin(data_range.emax));
+    if (verbose)
       std::cout << "stat    : " << stat << " (matches data) "<< std::endl;
-    }
   }
+  // rebin
+  M1_data->Rebin(rebin);
 
   // load model histograms
   for (auto && m : models) {
