@@ -1,3 +1,6 @@
 [submodule "utils/progressbar"]
 	path = utils/progressbar
 	url = git@github.com:gipert/progressbar.git
+[submodule "utils/args-reader"]
+	path = utils/args-reader
+	url = git@github.com:vonsturm/args-reader.git

@@ -32,7 +32,7 @@
 #include "progressbar/progressbar.hpp"
 
 //own
-#include "args_reader.hpp"
+#include "args-reader/args_reader.hpp"
 #include "arbitrary_sampler.hpp"
 
 using namespace nlohmann;
