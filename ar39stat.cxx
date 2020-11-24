@@ -52,7 +52,7 @@ struct dlm_t {
 // energy range
 struct range_t {
   int ID; double emin; double emax;
-  range_t(int ID, double emin, double emax) 
+  range_t(int ID, double emin, double emax)
     : ID(ID), emin(emin), emax(emax) {}
 };
 
@@ -70,7 +70,11 @@ void usage() {
   std::cout << "\t--emax <opt>       : maximum energy for chi2 test [100-200]\n";
   std::cout << "\t-t --toys <opt>    : number of toy experiments\n";
   std::cout << "\t-b <opt>           : rebin\n";
+  std::cout << "\t-o <opt>           : output directory\n";
+  std::cout << "\t--datastat <opt>   : data statistics json file[stat_interval_Ar.json]\n";
+  std::cout << "\t--test <opt>       : test statistics (0 = delta Chi2 => default, 1 = Chi2Test, 2 = KolmogorovTest)\n";
   std::cout << "\t-v                 : more output\n\n";
+
 }
 
 std::string get_filename(dlm_t model);
@@ -89,21 +93,27 @@ int main(int argc, char* argv[]) {
   bool help = false;
 
   std::string conf = "";
-  
+  std::string datastat = "";
+
   int channel = 0;
   int fccd = 1000;
   double dlf = 0.5;
-  int stat = 10000;
+  int stat = 20000;
+  int data_stat = 0;
+  range_t data_range(10000, 50, 130);
 
   int rebin = 1;
-  double Emin = 45, Emax = 150;
-  
+  double Emin = 50, Emax = 130;
+
   int toys = 100;
+
+  uint16_t test = 0;
 
   std::vector<dlm_t> models;
   std::vector<range_t> ranges;
-  
+
   std::string dir = "";
+
 
   // -------------------------------------------------------------------
   // fetch arguments
@@ -173,6 +183,7 @@ int main(int argc, char* argv[]) {
   fetch_arg(args, "-t",        toys   );
   fetch_arg(args, "-b",        rebin  );
   fetch_arg(args, "-o",        dir    );
+  fetch_arg(args, "--test",    test   );
   found = fetch_arg(args, "--emin", Emin) or
           fetch_arg(args, "--emax", Emax);
 
@@ -189,6 +200,28 @@ int main(int argc, char* argv[]) {
   for (auto & m : models) {
     for (auto & v : m.chi2) {
       v.resize(toys);
+    }
+  }
+
+  bool found_dstat = fetch_arg(args, "--datastat", datastat);
+  if (found_dstat) {
+    std::ifstream f_datastat(datastat);
+    json j_datastat; f_datastat >> j_datastat;
+    if (j_datastat.contains("data_stat")) {
+      std::string key = Form("M1_ch%i",channel);
+      if (!j_datastat["data_stat"].contains(key) or 
+          !j_datastat["data_stat"].contains("range")) {
+            std::cerr << "--datastat option given but json file is missing necessary keys" << std::endl;
+            exit(EXIT_FAILURE);
+      }
+      if (!j_datastat["data_stat"]["range"].contains("emin") or
+          !j_datastat["data_stat"]["range"].contains("emax")) {
+            std::cerr << "--datastat option given but json file is missing necessary keys" << std::endl;
+            exit(EXIT_FAILURE);
+      }
+      data_stat = j_datastat["data_stat"][key];
+      data_range.emin = j_datastat["range"]["emin"];
+      data_range.emax = j_datastat["range"]["emax"];
     }
   }
 
@@ -210,15 +243,23 @@ int main(int argc, char* argv[]) {
   // -------------------------------------------------------------------
 
   if (verbose) {
-    std::cout << "Channel : " << channel << std::endl;
-    std::cout << "FCCD    : " << fccd    << std::endl;
-    std::cout << "DLF     : " << dlf     << std::endl;
-    std::cout << "stat    : " << stat    << std::endl;
-    std::cout << "toys    : " << toys    << std::endl;
-    std::cout << "binning : " << rebin << " keV" << std::endl;
-    std::cout << "emin    : " << Emin  << " keV" << std::endl;
-    std::cout << "emax    : " << Emax  << " keV" << std::endl;
-    std::cout << "output dir : " << dir << "/" << std::endl;
+    std::cout << "Channel : "        << channel << std::endl;
+    std::cout << "FCCD    : "        << fccd    << std::endl;
+    std::cout << "DLF     : "        << dlf     << std::endl;
+    std::cout << "toys    : "        << toys    << std::endl;
+    std::cout << "binning : "        << rebin   << " keV" << std::endl;
+    std::cout << "emin    : "        << Emin    << " keV" << std::endl;
+    std::cout << "emax    : "        << Emax    << " keV" << std::endl;
+    std::cout << "output dir : "     << dir     << "/" << std::endl;
+    std::cout << "test statistics: "; 
+    switch (test) {
+      case 0  : std::cout << "delta Chi2";     break;
+      case 1  : std::cout << "Chi2Test";       break;
+      case 2  : std::cout << "KolmogorovTest"; break;
+      default : std::cout << "Test statistics not implemented using default: delta Chi2"; break;
+    }
+    std::cout << std::endl;
+    if (!found_dstat) std::cout << "stat    : " << stat << std::endl;
   }
 
   // -------------------------------------------------------------------
@@ -235,6 +276,14 @@ int main(int argc, char* argv[]) {
     std::cout << "Histogram not found: " << Form("raw/M1_ch%i", channel) << std::endl;
     return 1;
   }
+
+  if (found_dstat) {
+    stat = data_stat * M1_data->Integral() / M1_data->Integral(M1_data->FindFixBin(data_range.emin),
+                                                               M1_data->FindFixBin(data_range.emax));
+    if (verbose)
+      std::cout << "stat    : " << stat << " (matches data) "<< std::endl;
+  }
+  // rebin
   M1_data->Rebin(rebin);
 
   // load model histograms
@@ -242,6 +291,7 @@ int main(int argc, char* argv[]) {
     TFile fm(get_filename(m).c_str());
     m.hist = (TH1D*) fm.Get(Form("raw/M1_ch%i", channel));
     m.hist->Rebin(rebin);
+    //add here the ratio between the integrals
     m.hist->SetName(Form("model_fccd%d_dlf%03d",m.fccd,(int)(dlf*100)));
     fm.Close();
   }
@@ -253,11 +303,28 @@ int main(int argc, char* argv[]) {
     bar.update();
     TH1D * M1_toy = sample_histo(M1_data, stat);
 
+    std::vector<double> min_chi2(ranges.size(),10000.);
+
     for (auto && m : models) {
       for (auto r : ranges) {
         m.hist->GetXaxis()->SetRangeUser(r.emin,r.emax);
         M1_toy->GetXaxis()->SetRangeUser(r.emin,r.emax);
-        m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2");
+        switch (test) {
+          case 1  : m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2"); break;
+          case 2  : m.chi2.at(r.ID).at(i) = M1_toy->KolmogorovTest(m.hist);      break;
+          default : m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2");
+                    min_chi2.at(r.ID) = m.chi2.at(r.ID).at(i) < min_chi2.at(r.ID) ? m.chi2.at(r.ID).at(i) : min_chi2.at(r.ID);
+                    break;
+        }
+      }
+    }
+
+    // implement delta chi2 here
+    if (test == 0 or test > 2) {
+      for (auto && m : models) {
+        for (auto r : ranges) {
+          m.chi2.at(r.ID).at(i) -= min_chi2.at(r.ID);
+        }
       }
     }
 
@@ -298,7 +365,7 @@ std::string get_filename(int fccd, double dlf) {
   std::string name = "ph2p-ar39/nplus-fccd";
   name += std::to_string(fccd);
   name += "um-dlf";
-  name += Form("%03d", (int)(dlf*100)); 
+  name += Form("%03d", (int)(dlf*100));
   name += "/lar/sur_array_1/Ar39/pdf-lar-sur_array_1-Ar39.root";
 
   return name;
