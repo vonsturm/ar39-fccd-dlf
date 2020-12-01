@@ -64,10 +64,10 @@ Default values:
 ```
 
 
-## Dependencies
+## Pre-requisits and dependencies
 
-The code depends on the `Root CERN` libraries to be compiled using the
-following options (standard `c++17`)
+The code depends on the [ROOT](https://root.cern/) libraries to be
+compiled using the following options (standard `c++17`)
 
 ```
 cmake -Dhttp="ON"     \
@@ -80,9 +80,28 @@ cmake -Dhttp="ON"     \
       path/to/source
 ```
 
-and on the [progressbar](https://github.com/gipert/progressbar) utility by [gipert](https://github.com/gipert) included as submodule.
+The filter algorithm is based on the [gram savitzky golay
+library](https://github.com/arntanguy/gram_savitzky_golay) which should
+be included as submodule at some point and compiled automatically
 
-Interaction with `.json` files is done via [nlohmann/json](https://github.com/nlohmann/json). Consult the documentation for details.
+```
+git clone --recursive
+git@github.com:arntanguy/gram_savitzky_golay.git mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release .. make sudo make install
+```
+
+You need to install `Eigen3` (usually found in the repository of your
+distribution of choice) for GSG to work and you may need to relink the
+Eigen3 include files if they are installed in an unexpected place like a
+subfolder in /usr/include or similar.
+
+The [progressbar](https://github.com/gipert/progressbar) utility
+by [gipert](https://github.com/gipert) is included as submodule.
+
+Interaction with `.json` files is done via
+[nlohmann/json](https://github.com/nlohmann/json). Consult the
+documentation for details.
+
 
 ### Auxillary files
 
