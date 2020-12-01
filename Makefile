@@ -9,6 +9,10 @@ CXX = g++ -Wall -O3 -Wno-comments -Wno-unused-result
 CXXFLAGS = $(shell root-config --cflags) -I./utils -I.
 LIBS = $(shell root-config --libs) -lMinuit -ltbb
 
+# include savitzky golay filter algorithm lib
+CXXFLAGS += -I $(SWMOD_INST_BASE)/gsg/linux-fedora-28-x86_64/20201130/include
+LIBS += -L$(SWMOD_INST_BASE)/gsg/linux-fedora-28-x86_64/20201130/lib -lgram_savitzky_golay
+
 BINDIR = ./bin
 UTILS = $(wildcard ./utils/*.hpp)
 
