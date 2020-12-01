@@ -4,7 +4,8 @@
     "channel" : 0,
     "fccd" : 1000,
     "dlf" : 0.5,
-    "stat" : 50000
+    "stat" : 50000,
+    "filter" : { "type" : "mwa", "m-samples" : 10, "n-poly" : 3, "start" : 41 }
   },
   "models" : {
     "fccd" : [ -100, -50, 0, -50, 100 ],
