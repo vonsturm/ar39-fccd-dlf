@@ -31,9 +31,13 @@
 // progress
 #include "progressbar/progressbar.hpp"
 
+// savitzky golay filter
+#include "gram_savitzky_golay/gram_savitzky_golay.h"
+
 //own
 #include "args-reader/args_reader.hpp"
 #include "arbitrary_sampler.hpp"
+#include "filter.hpp"
 
 using namespace nlohmann;
 
@@ -60,20 +64,24 @@ void usage() {
   std::cout << "\nChi2 test statistic sampling with Ar39 GERDA simulation\n\n";
   std::cout << "USAGE : ./ar39-stat --json config.json <options>\n\n";
   std::cout << "OPTIONS :\n";
-  std::cout << "\t-h --help          : print this help text\n";
-  std::cout << "\t--json <opt>       : master config file [conf.json]\n";
-  std::cout << "\t-c --channel <opt> : channel [0-40]\n";
-  std::cout << "\t--fccd <opt>       : fccd value in um [450-3000:50] must be available\n";
-  std::cout << "\t--dlf <opt>        : dlf value as fraction [0.00-1.00:0.05] must be available\n";
-  std::cout << "\t-s --stat <opt>    : statistics to be sampled in each toy experiment\n";
-  std::cout << "\t--emin <opt>       : minimum energy for chi2 test [45-100]\n";
-  std::cout << "\t--emax <opt>       : maximum energy for chi2 test [100-200]\n";
-  std::cout << "\t-t --toys <opt>    : number of toy experiments\n";
-  std::cout << "\t-b <opt>           : rebin\n";
-  std::cout << "\t-o <opt>           : output directory\n";
-  std::cout << "\t--datastat <opt>   : data statistics json file[stat_interval_Ar.json]\n";
-  std::cout << "\t--test <opt>       : test statistics (0 = delta Chi2 => default, 1 = Chi2Test, 2 = KolmogorovTest)\n";
-  std::cout << "\t-v                 : more output\n\n";
+  std::cout << "\t-h --help           : print this help text\n";
+  std::cout << "\t--json <opt>        : master config file [conf.json]\n";
+  std::cout << "\t-c --channel <opt>  : channel [0-40]\n";
+  std::cout << "\t--fccd <opt>        : fccd value in um [450-3000:50] must be available\n";
+  std::cout << "\t--dlf <opt>         : dlf value as fraction [0.00-1.00:0.05] must be available\n";
+  std::cout << "\t-s --stat <opt>     : statistics to be sampled in each toy experiment\n";
+  std::cout << "\t--range <opt>       : minimum and maximum energy for chi2 test [45-100] and [100-200]\n";
+  std::cout << "\t-t --toys <opt>     : number of toy experiments\n";
+  std::cout << "\t-b <opt>            : rebin\n";
+  std::cout << "\t-o <opt>            : output directory\n";
+  std::cout << "\t--datastat <opt>    : data statistics json file [datastat.json]\n";
+  std::cout << "\t--test <opt>        : test statistics (0 = delta Chi2 => default, 1 = Chi2Test, 2 = KolmogorovTest)\n";
+  std::cout << "\t--filter-gsg <2opt> : apply smoothing (savitzky-golay) to data histogram from which toys are sampled\n";
+  std::cout << "                      : parameters are <number of points> and <order of polynomial> e.g. 22 3\n";
+  std::cout << "\t--filter-mwa <opt>  : apply smoothing (moving window average) to data histogram from which toys are sampled\n";
+  std::cout << "                      : parameters are <window width>\n";
+  std::cout << "\t--filter-start <opt>: apply filter only starting from sample with energy [keV]\n";
+  std::cout << "\t-v                  : more output\n\n";
 
 }
 
@@ -107,13 +115,16 @@ int main(int argc, char* argv[]) {
 
   int toys = 100;
 
-  uint16_t test = 0;
+  uint16_t test = 0; // 0 = delta Chi2 => default, 1 = Chi2Test, 2 = KolmogorovTest
 
   std::vector<dlm_t> models;
   std::vector<range_t> ranges;
 
   std::string dir = "";
 
+  uint16_t filter = 0;         // 0 none, 1 moving window, 2 savitzky golay
+  uint16_t nsamples = 0, npoly = 0; // in case 1 only first case 2 both
+  double start = 0;               // start energy of filter algorithm
 
   // -------------------------------------------------------------------
   // fetch arguments
@@ -144,6 +155,13 @@ int main(int argc, char* argv[]) {
       fccd    = j_conf["data"].value("fccd",fccd);
       dlf     = j_conf["data"].value("dlf",dlf);
       stat    = j_conf["data"].value("stat",stat);
+      if (j_conf["data"].contains("filter")) {
+        std::string s_filter = j_conf["data"]["filter"].value("type","gsg");
+        filter = s_filter == "mwa" ? 1 : 2;
+        nsamples  = j_conf["data"]["filter"].value("width",3);
+        npoly     = j_conf["data"]["filter"].value("pol-order",1);
+        start     = j_conf["data"]["filter"].value("start",0);
+      }
     }
     if (j_conf.contains("ranges")) {
       int emin_min   = j_conf["ranges"]["emin"]["min"]  .get<int>();
@@ -184,8 +202,18 @@ int main(int argc, char* argv[]) {
   fetch_arg(args, "-b",        rebin  );
   fetch_arg(args, "-o",        dir    );
   fetch_arg(args, "--test",    test   );
-  found = fetch_arg(args, "--emin", Emin) or
-          fetch_arg(args, "--emax", Emax);
+
+  // filter settings
+  std::vector<uint16_t> v_filter_conf(2);
+  fetch_arg(args, "--filter-start", start);
+  // mwa
+  found  = fetch_arg(args, "--filter-mwa", nsamples);
+  filter = found ? 1 : filter;
+  // gsg
+  found  = fetch_arg(args, "--filter-gsg", nsamples, npoly);
+  filter = found ? 2 : filter;
+  
+  found = fetch_arg(args, "--range", Emin, Emax);
 
   if (ranges.size()<=0 or found) {
     ranges.clear();
@@ -237,6 +265,11 @@ int main(int argc, char* argv[]) {
   if (rebin<1 or rebin>10)     {std::cout << "Rebin allowed range 1-10 keV : "   << rebin << " keV" << std::endl; return 1;}
   if (Emin<40 or Emin>100)     {std::cout << "Emin allowed range 40-100 keV : "  << Emin  << " keV" << std::endl; return 1;}
   if (Emax<100 or Emax>200)    {std::cout << "Emax allowed range 100-200 keV : " << Emax  << " keV" << std::endl; return 1;}
+  if (filter == 2 and nsamples <= npoly) {
+    std::cout << "WARNING: savitzky-golay filter number of samples (" << nsamples
+              << ") too low for polynomial order (" << npoly << ")" << std::endl;
+    return 1;
+  }
 
   // -------------------------------------------------------------------
   // print input parameters
@@ -253,13 +286,19 @@ int main(int argc, char* argv[]) {
     std::cout << "output dir : "     << dir     << "/" << std::endl;
     std::cout << "test statistics: "; 
     switch (test) {
-      case 0  : std::cout << "delta Chi2";     break;
-      case 1  : std::cout << "Chi2Test";       break;
-      case 2  : std::cout << "KolmogorovTest"; break;
-      default : std::cout << "Test statistics not implemented using default: delta Chi2"; break;
+      case 0  : std::cout << "delta Chi2\n";     break;
+      case 1  : std::cout << "Chi2Test\n";       break;
+      case 2  : std::cout << "KolmogorovTest\n"; break;
+      default : std::cout << "Test statistics not implemented using default: delta Chi2\n"; break;
     }
-    std::cout << std::endl;
     if (!found_dstat) std::cout << "stat    : " << stat << std::endl;
+    std::cout << "filter  : "; 
+    switch (filter) {
+      case 0  : std::cout << "none\n"; break;
+      case 1  : std::cout << "moving window average [width = " << nsamples << "]\n"; break;
+      case 2  : std::cout << "savitzky-golay [width = " << nsamples << ", poly-order = " << npoly << "]\n"; break;
+      default : std::cout << "unknown\n"; break;
+    }
   }
 
   // -------------------------------------------------------------------
@@ -278,13 +317,17 @@ int main(int argc, char* argv[]) {
   }
 
   if (found_dstat) {
-    stat = data_stat * M1_data->Integral() / M1_data->Integral(M1_data->FindFixBin(data_range.emin),
-                                                               M1_data->FindFixBin(data_range.emax));
+    stat = (double)data_stat * M1_data->Integral() /
+                               M1_data->Integral(M1_data->FindFixBin(data_range.emin),
+                                                 M1_data->FindFixBin(data_range.emax));
     if (verbose)
       std::cout << "stat    : " << stat << " (matches data) "<< std::endl;
   }
   // rebin
   M1_data->Rebin(rebin);
+
+  // apply filter algorithm
+  TH1D * M1_smooth = smoothing::apply_filter(M1_data, filter, nsamples, npoly, start);
 
   // load model histograms
   for (auto && m : models) {
@@ -301,7 +344,7 @@ int main(int argc, char* argv[]) {
 
   for (int i = 0; i < toys; i++) {
     bar.update();
-    TH1D * M1_toy = sample_histo(M1_data, stat);
+    TH1D * M1_toy = sample_histo(M1_smooth, stat);
 
     std::vector<double> min_chi2(ranges.size(),10000.);
 
@@ -319,7 +362,7 @@ int main(int argc, char* argv[]) {
       }
     }
 
-    // implement delta chi2 here
+    // apply delta chi2 offset
     if (test == 0 or test > 2) {
       for (auto && m : models) {
         for (auto r : ranges) {

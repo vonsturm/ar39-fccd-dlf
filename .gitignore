@@ -3,9 +3,14 @@ ph2p-ar39/
 plots/
 bin/
 data/
-settings/*.json
+
+ph2p-ar39
 
 *.root
 *.pdf
 
 root-macros/chi2test_best_values.json
+
+.*
+
+env.sh
