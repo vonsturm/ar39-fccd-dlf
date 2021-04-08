@@ -43,9 +43,9 @@ struct dlm_t {
   int fccd;
   double dlf;
   TH1D * hist;
-  std::vector<std::vector<double>> chi2;
+  std::vector<double> chi2;
 
-  dlm_t(int ID, int fccd, double dlf, std::vector<std::vector<double>> chi2)
+  dlm_t(int ID, int fccd, double dlf, std::vector<double> chi2)
     : ID(ID), fccd(fccd), dlf(dlf), hist(nullptr), chi2(chi2) {}
 };
 
@@ -62,24 +62,17 @@ void usage() {
   std::cout << "OPTIONS :\n";
   std::cout << "\t-h --help          : print this help text\n";
   std::cout << "\t--json <opt>       : master config file [conf.json]\n";
-  std::cout << "\t-c --channel <opt> : channel [0-40]\n";
-  std::cout << "\t--fccd <opt>       : fccd value in um [450-3000:50] must be available\n";
-  std::cout << "\t--dlf <opt>        : dlf value as fraction [0.00-1.00:0.05] must be available\n";
-  std::cout << "\t-s --stat <opt>    : statistics to be sampled in each toy experiment\n";
   std::cout << "\t--emin <opt>       : minimum energy for chi2 test [45-100]\n";
   std::cout << "\t--emax <opt>       : maximum energy for chi2 test [100-200]\n";
-  std::cout << "\t-t --toys <opt>    : number of toy experiments\n";
-  std::cout << "\t-b <opt>           : rebin\n";
+  std::cout << "\t-r <opt>           : rebin\n";
   std::cout << "\t-o <opt>           : output directory\n";
-  std::cout << "\t--datastat <opt>   : data statistics json file[stat_interval_Ar.json]\n";
   std::cout << "\t--test <opt>       : test statistics (0 = delta Chi2 => default, 1 = Chi2Test, 2 = KolmogorovTest)\n";
   std::cout << "\t-v                 : more output\n\n";
-
 }
 
 std::string get_filename(dlm_t model);
 std::string get_filename(int fccd, double dlf);
-std::string get_ofilename(int channel, int fccd, double dlf, range_t r, std::string dir = "");
+std::string get_ofilename(bool toys, int channel, range_t r, std::string dir = "");
 std::string get_treename(int channel, range_t r);
 
 int main(int argc, char* argv[]) {
@@ -90,30 +83,19 @@ int main(int argc, char* argv[]) {
   // default input parameters
   // -------------------------------------------------------------------
   bool verbose = false;
-  bool help = false;
+  bool help    = false;
+  bool toys    = false;
 
-  std::string conf = "";
-  std::string datastat = "";
+  std::string conf   = "";
+  std::string infile = "";
+  std::string outdir = "";
+  uint16_t channel = 0;
 
-  int channel = 0;
-  int fccd = 1000;
-  double dlf = 0.5;
-  int stat = 20000;
-  int data_stat = 0;
-  range_t data_range(10000, 50, 130);
-
-  int rebin = 1;
-  double Emin = 50, Emax = 130;
-
-  int toys = 100;
-
-  uint16_t test = 0;
+  uint8_t rebin = 1;
+  uint16_t teststat = 0;
+  range_t fit_range(10000, 45, 160);
 
   std::vector<dlm_t> models;
-  std::vector<range_t> ranges;
-
-  std::string dir = "";
-
 
   // -------------------------------------------------------------------
   // fetch arguments
@@ -133,230 +115,145 @@ int main(int argc, char* argv[]) {
     std::ifstream f_conf(conf);
     json j_conf; f_conf >> j_conf;
 
-    verbose = j_conf.value("verbose",verbose);
+    j_conf.value("verbose",verbose);
     if (verbose) std::cout << "---Found master conf---\n";
 
-    rebin   = j_conf.value("rebin",rebin);
-    toys    = j_conf.value("number-of-toys",toys);
-    dir     = j_conf.value("output-dir",dir);
+    rebin  = j_conf.value("rebin",rebin);
+    outdir = j_conf.value("output-dir",outdir);
     if (j_conf.contains("data")) {
-      channel = j_conf["data"].value("channel",channel);
-      fccd    = j_conf["data"].value("fccd",fccd);
-      dlf     = j_conf["data"].value("dlf",dlf);
-      stat    = j_conf["data"].value("stat",stat);
+      infile = j_conf["data"].value("file",infile);
+      toys   = j_conf["data"].value("toys",toys);
     }
-    if (j_conf.contains("ranges")) {
-      int emin_min   = j_conf["ranges"]["emin"]["min"]  .get<int>();
-      int emin_max   = j_conf["ranges"]["emin"]["max"]  .get<int>();
-      int emin_delta = j_conf["ranges"]["emin"]["delta"].get<int>();
-      int emax_min   = j_conf["ranges"]["emax"]["min"]  .get<int>();
-      int emax_max   = j_conf["ranges"]["emax"]["max"]  .get<int>();
-      int emax_delta = j_conf["ranges"]["emax"]["delta"].get<int>();
-      int ID = 0;
-
-      for (int i = emin_min; i <= emin_max; i+=emin_delta) {
-        for (int j = emax_min; j <= emax_max; j+=emax_delta) {
-          ranges.emplace_back(ID++, (double)i, (double)j);
-        }
-      }
+    if (j_conf.contains("fit-range")) {
+      fit_range = range_t( 
+        0,
+        j_conf["fit-range"].value("emin",45),
+        j_conf["fit-range"].value("emax",160)
+      );
     }
-    else ranges.emplace_back(0,Emin,Emax);
 
     if (j_conf.contains("models")) {
       int ID = 0;
-      for (auto f : j_conf["models"]["fccd"]) {
-        for (auto d : j_conf["models"]["dlf"]) {
-          models.emplace_back(ID++, fccd+f.get<int>(), dlf+d.get<double>(),
-            std::vector<std::vector<double>>(ranges.size(), std::vector<double>())); // chi
+      int fccd_start = j_conf["models"]["fccd"]["start"].get<int>(); 
+      int fccd_stop  = j_conf["models"]["fccd"]["stop"].get<int>(); 
+      int fccd_step  = j_conf["models"]["fccd"]["step"].get<int>(); 
+      double dlf_start = j_conf["models"]["fccd"]["start"].get<double>(); 
+      double dlf_stop  = j_conf["models"]["fccd"]["stop"].get<double>(); 
+      double dlf_step  = j_conf["models"]["fccd"]["step"].get<double>(); 
+      for (int f = fccd_start; f <= fccd_stop; f += fccd_step ) {
+        for (double d = dlf_start; d <= dlf_stop; d += dlf_step ) {
+          models.emplace_back(ID++, f, d, std::vector<double>()); // chi
         }
       }
     }
   }
 
-  fetch_arg(args, "--channel", channel);
-  fetch_arg(args, "-c",        channel);
-  fetch_arg(args, "--fccd",    fccd   );
-  fetch_arg(args, "--dlf",     dlf    );
-  fetch_arg(args, "-s",        stat   );
-  fetch_arg(args, "--stat",    stat   );
-  fetch_arg(args, "--toys",    toys   );
-  fetch_arg(args, "-t",        toys   );
-  fetch_arg(args, "-b",        rebin  );
-  fetch_arg(args, "-o",        dir    );
-  fetch_arg(args, "--test",    test   );
-  found = fetch_arg(args, "--emin", Emin) or
-          fetch_arg(args, "--emax", Emax);
-
-  if (ranges.size()<=0 or found) {
-    ranges.clear();
-    ranges.emplace_back(0,Emin,Emax);
-  }
-  else {
-    Emin = ranges.front().emin;
-    Emax = ranges.back().emax;
-  }
-
-  // resize toys vectors
-  for (auto & m : models) {
-    for (auto & v : m.chi2) {
-      v.resize(toys);
-    }
-  }
-
-  bool found_dstat = fetch_arg(args, "--datastat", datastat);
-  if (found_dstat) {
-    std::ifstream f_datastat(datastat);
-    json j_datastat; f_datastat >> j_datastat;
-    if (j_datastat.contains("data_stat")) {
-      std::string key = Form("M1_ch%i",channel);
-      if (!j_datastat["data_stat"].contains(key) or 
-          !j_datastat["data_stat"].contains("range")) {
-            std::cerr << "--datastat option given but json file is missing necessary keys" << std::endl;
-            exit(EXIT_FAILURE);
-      }
-      if (!j_datastat["data_stat"]["range"].contains("emin") or
-          !j_datastat["data_stat"]["range"].contains("emax")) {
-            std::cerr << "--datastat option given but json file is missing necessary keys" << std::endl;
-            exit(EXIT_FAILURE);
-      }
-      data_stat = j_datastat["data_stat"][key];
-      data_range.emin = j_datastat["range"]["emin"];
-      data_range.emax = j_datastat["range"]["emax"];
-    }
-  }
+  fetch_arg(args, "-r", rebin  );
+  fetch_arg(args, "-o", outdir );
 
   // -------------------------------------------------------------------
   // check input parameters
   // -------------------------------------------------------------------
-
-  if (channel<0 or channel>40) {std::cout << "Invalid channel number "           << channel << std::endl; return 1;}
-  if (fccd<450 or fccd>3000)   {std::cout << "FCCD allowed range 450-3000: "     << fccd    << std::endl; return 1;}
-  if (dlf<0. or dlf>1.)        {std::cout << "DLF allowed range 0.0-1.0 "        << dlf     << std::endl; return 1;}
-  if (stat<100)                {std::cout << "Low statistics : "                 << stat    << std::endl; return 1;}
-  if (toys<10)                 {std::cout << "Low number of toy experiments : "  << toys    << std::endl; return 1;}
-  if (rebin<1 or rebin>10)     {std::cout << "Rebin allowed range 1-10 keV : "   << rebin << " keV" << std::endl; return 1;}
-  if (Emin<40 or Emin>100)     {std::cout << "Emin allowed range 40-100 keV : "  << Emin  << " keV" << std::endl; return 1;}
-  if (Emax<100 or Emax>200)    {std::cout << "Emax allowed range 100-200 keV : " << Emax  << " keV" << std::endl; return 1;}
+  if (fit_range.emin < fit_range.emax) { std::cout << "Error: Fit range minimum greater than maxium. Aborting.\n";        exit(EXIT_FAILURE); }
+  if (fit_range.emin < 45)             { std::cout << "Fit range minimum too small " << fit_range.emin << " Aborting.\n"; exit(EXIT_FAILURE); }
+  if (fit_range.emax > 2000)           { std::cout << "Fit range maximum too large " << fit_range.emax << " Aborting.\n"; exit(EXIT_FAILURE); }
+  if (rebin<1 or rebin>10)             { std::cout << "Rebin allowed range 1-10 keV : " << rebin << " keV. Aborting.\n";  exit(EXIT_FAILURE); }
 
   // -------------------------------------------------------------------
   // print input parameters
   // -------------------------------------------------------------------
 
   if (verbose) {
-    std::cout << "Channel : "        << channel << std::endl;
-    std::cout << "FCCD    : "        << fccd    << std::endl;
-    std::cout << "DLF     : "        << dlf     << std::endl;
-    std::cout << "toys    : "        << toys    << std::endl;
-    std::cout << "binning : "        << rebin   << " keV" << std::endl;
-    std::cout << "emin    : "        << Emin    << " keV" << std::endl;
-    std::cout << "emax    : "        << Emax    << " keV" << std::endl;
-    std::cout << "output dir : "     << dir     << "/" << std::endl;
+    if (toys) std::cout << "Processing: gerda-factory toy MCs - " << infile << std::endl;
+    else      std::cout << "Processing: Real Data - " << infile << std::endl;
+    std::cout << "binning : "    << rebin          << " keV\n";
+    std::cout << "range   : "    << fit_range.emin << " - " << fit_range.emax  << " keV\n";
+    std::cout << "output dir : " << outdir         << "/\n";
     std::cout << "test statistics: "; 
-    switch (test) {
-      case 0  : std::cout << "delta Chi2";     break;
-      case 1  : std::cout << "Chi2Test";       break;
-      case 2  : std::cout << "KolmogorovTest"; break;
-      default : std::cout << "Test statistics not implemented using default: delta Chi2"; break;
+    switch (teststat) {
+      case 0  : std::cout << "delta Chi2\n";     break;
+      case 1  : std::cout << "Chi2Test\n";       break;
+      case 2  : std::cout << "KolmogorovTest\n"; break;
+      default : std::cout << "Test statistics not implemented using default: delta Chi2\n"; break;
     }
-    std::cout << std::endl;
-    if (!found_dstat) std::cout << "stat    : " << stat << std::endl;
   }
 
   // -------------------------------------------------------------------
   // now do the thing
   // -------------------------------------------------------------------
-  TFile fin(get_filename(fccd, dlf).c_str());
+  TFile fin(infile.c_str());
   if (fin.IsZombie() or !fin.IsOpen()) {
-    std::cout << "Could not open file: " << get_filename(fccd, dlf).c_str() << std::endl;
-    return 1;
-  }
-  TH1D * M1_data = (TH1D*) fin.Get(Form("raw/M1_ch%i", channel));
-  fin.Close();
-  if (!M1_data) {
-    std::cout << "Histogram not found: " << Form("raw/M1_ch%i", channel) << std::endl;
-    return 1;
+    std::cout << "Could not open file: " << infile << std::endl;
+    exit(EXIT_FAILURE);
   }
 
-  if (found_dstat) {
-    stat = data_stat * M1_data->Integral() / M1_data->Integral(M1_data->FindFixBin(data_range.emin),
-                                                               M1_data->FindFixBin(data_range.emax));
-    if (verbose)
-      std::cout << "stat    : " << stat << " (matches data) "<< std::endl;
-  }
-  // rebin
-  M1_data->Rebin(rebin);
+  // fill data/toys vector
+  std::vector<TH1D*> v_data; //TODO
 
-  // load model histograms
+  // load model histograms 
   for (auto && m : models) {
     TFile fm(get_filename(m).c_str());
     m.hist = (TH1D*) fm.Get(Form("raw/M1_ch%i", channel));
     m.hist->Rebin(rebin);
     //add here the ratio between the integrals
-    m.hist->SetName(Form("model_fccd%d_dlf%03d",m.fccd,(int)(dlf*100)));
+    m.hist->SetName(Form("model_fccd%d_dlf%03d",m.fccd,(int)(m.dlf*100)));
+    m.chi2.resize(v_data.size());
     fm.Close();
   }
 
+  // gerda-factory TOYS as input: loop over input file histograms
   progressbar bar(toys);
   bar.set_done_char("-");
 
-  for (int i = 0; i < toys; i++) {
+  int i = 0;
+  for (auto data : v_data) {
+    // rebin
+    data->Rebin(rebin);
     bar.update();
-    TH1D * M1_toy = sample_histo(M1_data, stat);
 
-    std::vector<double> min_chi2(ranges.size(),10000.);
+    double min_chi2 = 10000.;
 
     for (auto && m : models) {
-      for (auto r : ranges) {
-        m.hist->GetXaxis()->SetRangeUser(r.emin,r.emax);
-        M1_toy->GetXaxis()->SetRangeUser(r.emin,r.emax);
-        switch (test) {
-          case 1  : m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2"); break;
-          case 2  : m.chi2.at(r.ID).at(i) = M1_toy->KolmogorovTest(m.hist);      break;
-          default : m.chi2.at(r.ID).at(i) = M1_toy->Chi2Test(m.hist, "UW CHI2");
-                    min_chi2.at(r.ID) = m.chi2.at(r.ID).at(i) < min_chi2.at(r.ID) ? m.chi2.at(r.ID).at(i) : min_chi2.at(r.ID);
-                    break;
-        }
+      m.hist->GetXaxis()->SetRangeUser(fit_range.emin,fit_range.emax);
+      data  ->GetXaxis()->SetRangeUser(fit_range.emin,fit_range.emax);
+      switch (teststat) {
+        case 1  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2"); break;
+        case 2  : m.chi2.at(i) = data->KolmogorovTest(m.hist);      break;
+        default : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2");
+                  min_chi2 = m.chi2.at(i) < min_chi2 ? m.chi2.at(i) : min_chi2;
+                  break;
       }
     }
 
     // implement delta chi2 here
-    if (test == 0 or test > 2) {
-      for (auto && m : models) {
-        for (auto r : ranges) {
-          m.chi2.at(r.ID).at(i) -= min_chi2.at(r.ID);
-        }
-      }
+    if (teststat == 0 or teststat > 2) {
+      for (auto && m : models) m.chi2.at(i) -= min_chi2;
     }
 
-    delete M1_toy; M1_toy = nullptr;
+    i++;
   }
   std::cout << "\n";
 
   // model histograms are not needed anymore at this point
-  for (auto && m : models) {
-    delete m.hist; m.hist = nullptr;
-  }
-  delete M1_data; M1_data = nullptr;
+  for (auto && m : models) { delete m.hist; m.hist = nullptr; }
+  for (auto && d : v_data) { delete d; d = nullptr; }
 
   // dump everything to file
-  if (dir!="") system(Form("mkdir -p %s",dir.c_str()));
-  for (auto r : ranges) {
-    TFile of(get_ofilename(channel,fccd,dlf,r,dir).c_str(),"RECREATE");
-    TTree tree("tree", get_treename(channel,r).c_str());
-    std::vector<double> v_chi2(models.size());
-    for (auto m : models)
-      tree.Branch(Form("chi2_%i_%03d",m.fccd,(int)(m.dlf*100)), &v_chi2.at(m.ID));
+  if (outdir!="") system(Form("mkdir -p %s",outdir.c_str()));
 
-    for (int i=0; i<toys; i++) {
-      for (auto m : models){
-        v_chi2.at(m.ID) = m.chi2.at(r.ID).at(i);
-      }
-      tree.Fill();
-    }
+  TFile of(get_ofilename(toys,channel,fit_range,outdir).c_str(),"RECREATE");
+  TTree tree("statTree", "statTree");
+  std::vector<double> v_chi2(models.size());
+  for (auto m : models)
+    tree.Branch(Form("chi2_%i_%03d",m.fccd,(int)(m.dlf*100)), &v_chi2.at(m.ID));
 
-    tree.Write();
-    of.Close();
+  for (int i=0; i<toys; i++) {
+    for (auto m : models) v_chi2.at(m.ID) = m.chi2.at(i);
+    tree.Fill();
   }
+
+  tree.Write();
+  of.Close();
 
   return 0;
 }
@@ -375,11 +272,11 @@ std::string get_filename(dlm_t model) {
   return get_filename(model.fccd, model.dlf);
 }
 
-std::string get_ofilename(int channel, int fccd, double dlf, range_t r, std::string dir) {
+std::string get_ofilename(bool toys, int channel, range_t r, std::string dir) {
   std::string ofname = "";
   if (dir!="") ofname = dir + "/";
-  ofname += "ar39stat_ch"+std::to_string(channel)+"_fccd"+std::to_string(fccd)+"um_dlf";
-  ofname += Form("%03d_range",(int)(dlf*100));
+  if (toys)    ofname += "toys_";
+  ofname += "ar39stat_ch"+std::to_string(channel) + "_";
   ofname += std::to_string((int)r.emin)+"-"+std::to_string((int)r.emax)+".root";
 
   return ofname;

@@ -1,20 +1,11 @@
 {
-  "verbose" : true,
-  "data" : {
-    "channel" : 0,
-    "fccd" : 1000,
-    "dlf" : 0.5,
-    "stat" : 50000
-  },
+  "data" : { "file" : "data/gerda-data-bkgmodel-phaseIIplus-v07.00.root", "channel" : 0, "toys" : false }
   "models" : {
-    "fccd" : [ -100, -50, 0, -50, 100 ],
-    "dlf"  : [ -0.1, -0.05, 0, -0.05, 0.1 ]
+    "fccd" : { "start" : 1000, "stop" : 2000, "step" : 100 },
+    "dlf"  : { "start" : 0, "stop" : 1, "step" : 0.1 }
   },
-  "ranges" : {
-    "emin" : { "min" : 45,  "max" : 60,  "delta" : 5  },
-    "emax" : { "min" : 140, "max" : 170, "delta" : 10 }
-  },
+  "fit-range" : { "emin" : 45, "emax" : 160 },
   "rebin" : 1,
-  "number-of-toys" : 100,
-  "output-dir" : "./output"
+  "output-dir" : "./output",
+  "verbose" : true
 }
