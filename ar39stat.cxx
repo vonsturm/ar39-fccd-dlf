@@ -148,6 +148,11 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  fetch_arg(args, "--test", teststat);
+
+  fetch_arg(args, "--emin", fit_range.emin);
+  fetch_arg(args, "--emax", fit_range.emax);
+
   fetch_arg(args, "-r", rebin  );
   fetch_arg(args, "-o", outdir );
 
