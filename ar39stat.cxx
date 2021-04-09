@@ -188,7 +188,22 @@ int main(int argc, char* argv[]) {
   }
 
   // fill data/toys vector
-  std::vector<TH1D*> v_data; //TODO
+  std::vector<TH1D*> v_data(1000); //TODO
+  if (!toys) {
+    v_data[0] = dynamic_cast<TH1D*>( fin.Get(Form("raw/M1_%i",channel)) );
+    v_data.resize(1);
+  }
+  else {
+    int hct = 0;
+    for (auto && keyAsObj : *fin.GetListOfKeys()){
+      auto key = (TKey*) keyAsObj;
+      //std::cout << key->GetName() << " " << key->GetClassName() << std::endl;
+      if (std::string(key->GetClassName()) == "TH1D") {
+        v_data[hct++] = dynamic_cast<TH1D*>( fin.Get(key->GetName()) );
+      }
+    }
+    v_data.resize(hct);
+  }
 
   // load model histograms 
   for (auto && m : models) {
