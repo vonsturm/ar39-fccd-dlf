@@ -1,0 +1,11 @@
+{
+  "data" : { "file" : "test-toys/output_Ar39-systematics_1000MC_ch0.root", "channel" : 0, "toys" : true },
+  "models" : {
+    "fccd" : { "start" : 1000, "stop" : 2000, "step" : 100 },
+    "dlf"  : { "start" : 0, "stop" : 0.9, "step" : 0.1 }
+  },
+  "fit-range" : { "emin" : 45, "emax" : 160 },
+  "rebin" : 1,
+  "output-dir" : "./output/test-toys",
+  "verbose" : true
+}

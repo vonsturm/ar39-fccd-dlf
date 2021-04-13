@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <string>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <execution> // for parallel policies
 #include <algorithm>
@@ -91,7 +92,7 @@ int main(int argc, char* argv[]) {
   std::string outdir = "";
   uint16_t channel = 0;
 
-  uint8_t rebin = 1;
+  uint16_t rebin = 1;
   uint16_t teststat = 0;
   range_t fit_range(10000, 45, 160);
 
@@ -173,7 +174,6 @@ int main(int argc, char* argv[]) {
     else      std::cout << "Processing: Real Data - " << infile << std::endl;
     std::cout << "binning : "    << rebin          << " keV\n";
     std::cout << "range   : "    << fit_range.emin << " - " << fit_range.emax  << " keV\n";
-    std::cout << "output dir : " << outdir         << "/\n";
     std::cout << "test statistics: "; 
     switch (teststat) {
       case 0  : std::cout << "delta Chi2\n";     break;
@@ -193,7 +193,7 @@ int main(int argc, char* argv[]) {
   }
 
   // fill data/toys vector
-  std::vector<TH1D*> v_data(1000); //TODO
+  std::vector<TH1D*> v_data(100000);
   if (!toys) {
     v_data[0] = dynamic_cast<TH1D*>( fin.Get(Form("raw/M1_%i",channel)) );
     v_data.resize(1);
@@ -209,6 +209,7 @@ int main(int argc, char* argv[]) {
     }
     v_data.resize(hct);
   }
+  fin.Close();
 
   // load model histograms 
   for (auto && m : models) {
@@ -216,17 +217,19 @@ int main(int argc, char* argv[]) {
     m.hist = (TH1D*) fm.Get(Form("raw/M1_ch%i", channel));
     m.hist->Rebin(rebin);
     //add here the ratio between the integrals
-    m.hist->SetName(Form("model_fccd%d_dlf%03d",m.fccd,(int)(m.dlf*100)));
+    float f_dlf = m.dlf*100;
+    m.hist->SetName(Form("model_fccd%d_dlf%03d",m.fccd,(int)(f_dlf)));
     m.chi2.resize(v_data.size());
     fm.Close();
   }
 
-  // gerda-factory TOYS as input: loop over input file histograms
-  progressbar bar(toys);
+  progressbar bar(v_data.size());
   bar.set_done_char("-");
 
+  if (toys) std::cout << "Number of toys: " << v_data.size() << std::endl;
+
   int i = 0;
-  for (auto data : v_data) {
+  for (auto && data : v_data) {
     // rebin
     data->Rebin(rebin);
     bar.update();
@@ -236,6 +239,16 @@ int main(int argc, char* argv[]) {
     for (auto && m : models) {
       m.hist->GetXaxis()->SetRangeUser(fit_range.emin,fit_range.emax);
       data  ->GetXaxis()->SetRangeUser(fit_range.emin,fit_range.emax);
+
+      if (data->Integral(fit_range.emin,fit_range.emax) < 10) {
+        std::cout << "\nEmpty Hist: " << data->GetName() << " " << data->Integral() << std::endl;
+        exit(EXIT_FAILURE);
+      }
+      if (m.hist->Integral(fit_range.emin,fit_range.emax) < 10) {
+        std::cout << "\nEmpty Hist: " << m.hist->GetName() << " " << m.hist->Integral() << std::endl;
+        exit(EXIT_FAILURE);
+      }
+
       switch (teststat) {
         case 1  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2"); break;
         case 2  : m.chi2.at(i) = data->KolmogorovTest(m.hist);      break;
@@ -279,10 +292,11 @@ int main(int argc, char* argv[]) {
 }
 
 std::string get_filename(int fccd, double dlf) {
+  float f_dlf = dlf*100;
   std::string name = "ph2p-ar39/nplus-fccd";
   name += std::to_string(fccd);
   name += "um-dlf";
-  name += Form("%03d", (int)(dlf*100));
+  name += Form("%03d", (int)(f_dlf)); 
   name += "/lar/sur_array_1/Ar39/pdf-lar-sur_array_1-Ar39.root";
 
   return name;
