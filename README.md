@@ -1,4 +1,6 @@
 
+# DEPRECATED: This needs to be redone...
+
 # Ar39stat
 
 Toy Monte Carlo sampler of simulated <sup>39</sup>Ar GERDA spectra. 
