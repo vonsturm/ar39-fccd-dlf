@@ -137,9 +137,9 @@ int main(int argc, char* argv[]) {
       int fccd_start = j_conf["models"]["fccd"]["start"].get<int>(); 
       int fccd_stop  = j_conf["models"]["fccd"]["stop"].get<int>(); 
       int fccd_step  = j_conf["models"]["fccd"]["step"].get<int>(); 
-      double dlf_start = j_conf["models"]["fccd"]["start"].get<double>(); 
-      double dlf_stop  = j_conf["models"]["fccd"]["stop"].get<double>(); 
-      double dlf_step  = j_conf["models"]["fccd"]["step"].get<double>(); 
+      double dlf_start = j_conf["models"]["dlf"]["start"].get<double>(); 
+      double dlf_stop  = j_conf["models"]["dlf"]["stop"].get<double>(); 
+      double dlf_step  = j_conf["models"]["dlf"]["step"].get<double>(); 
       for (int f = fccd_start; f <= fccd_stop; f += fccd_step ) {
         for (double d = dlf_start; d <= dlf_stop; d += dlf_step ) {
           models.emplace_back(ID++, f, d, std::vector<double>()); // chi
@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
   // -------------------------------------------------------------------
   // check input parameters
   // -------------------------------------------------------------------
-  if (fit_range.emin < fit_range.emax) { std::cout << "Error: Fit range minimum greater than maxium. Aborting.\n";        exit(EXIT_FAILURE); }
+  if (fit_range.emin > fit_range.emax) { std::cout << "Error: Fit range minimum greater than maxium. Aborting.\n";        exit(EXIT_FAILURE); }
   if (fit_range.emin < 45)             { std::cout << "Fit range minimum too small " << fit_range.emin << " Aborting.\n"; exit(EXIT_FAILURE); }
   if (fit_range.emax > 2000)           { std::cout << "Fit range maximum too large " << fit_range.emax << " Aborting.\n"; exit(EXIT_FAILURE); }
   if (rebin<1 or rebin>10)             { std::cout << "Rebin allowed range 1-10 keV : " << rebin << " keV. Aborting.\n";  exit(EXIT_FAILURE); }
