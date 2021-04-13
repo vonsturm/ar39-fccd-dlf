@@ -1,5 +1,5 @@
 {
-  "data" : { "file" : "data/gerda-data-bkgmodel-phaseIIplus-v07.00.root", "channel" : 0, "toys" : false }
+  "data" : { "file" : "data/gerda-data-bkgmodel-phaseIIplus-v07.00.root", "channel" : 0, "toys" : false },
   "models" : {
     "fccd" : { "start" : 1000, "stop" : 2000, "step" : 100 },
     "dlf"  : { "start" : 0, "stop" : 1, "step" : 0.1 }
