@@ -137,9 +137,9 @@ int main(int argc, char* argv[]) {
       int fccd_start = j_conf["models"]["fccd"]["start"].get<int>(); 
       int fccd_stop  = j_conf["models"]["fccd"]["stop"].get<int>(); 
       int fccd_step  = j_conf["models"]["fccd"]["step"].get<int>(); 
-      double dlf_start = j_conf["models"]["fccd"]["start"].get<double>(); 
-      double dlf_stop  = j_conf["models"]["fccd"]["stop"].get<double>(); 
-      double dlf_step  = j_conf["models"]["fccd"]["step"].get<double>(); 
+      double dlf_start = j_conf["models"]["dlf"]["start"].get<double>(); 
+      double dlf_stop  = j_conf["models"]["dlf"]["stop"].get<double>(); 
+      double dlf_step  = j_conf["models"]["dlf"]["step"].get<double>(); 
       for (int f = fccd_start; f <= fccd_stop; f += fccd_step ) {
         for (double d = dlf_start; d <= dlf_stop; d += dlf_step ) {
           models.emplace_back(ID++, f, d, std::vector<double>()); // chi
