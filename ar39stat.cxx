@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
   // -------------------------------------------------------------------
   // check input parameters
   // -------------------------------------------------------------------
-  if (fit_range.emin < fit_range.emax) { std::cout << "Error: Fit range minimum greater than maxium. Aborting.\n";        exit(EXIT_FAILURE); }
+  if (fit_range.emin > fit_range.emax) { std::cout << "Error: Fit range minimum greater than maxium. Aborting.\n";        exit(EXIT_FAILURE); }
   if (fit_range.emin < 45)             { std::cout << "Fit range minimum too small " << fit_range.emin << " Aborting.\n"; exit(EXIT_FAILURE); }
   if (fit_range.emax > 2000)           { std::cout << "Fit range maximum too large " << fit_range.emax << " Aborting.\n"; exit(EXIT_FAILURE); }
   if (rebin<1 or rebin>10)             { std::cout << "Rebin allowed range 1-10 keV : " << rebin << " keV. Aborting.\n";  exit(EXIT_FAILURE); }
