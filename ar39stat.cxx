@@ -73,7 +73,7 @@ void usage() {
 
 std::string get_filename(dlm_t model);
 std::string get_filename(int fccd, double dlf);
-std::string get_ofilename(bool toys, int channel, range_t r, std::string dir = "");
+std::string get_ofilename(bool toys, int channel, int rebin, range_t r, std::string dir);
 std::string get_treename(int channel, range_t r);
 
 int main(int argc, char* argv[]) {
@@ -273,14 +273,20 @@ int main(int argc, char* argv[]) {
   // dump everything to file
   if (outdir!="") system(Form("mkdir -p %s",outdir.c_str()));
 
-  TFile of(get_ofilename(toys,channel,fit_range,outdir).c_str(),"RECREATE");
+  TFile of(get_ofilename(toys,channel,rebin,fit_range,outdir).c_str(),"RECREATE");
   TTree tree("statTree", "statTree");
   std::vector<double> v_chi2(models.size());
+  int best_fccd = 0; double best_dlf = 0;
   for (auto m : models)
     tree.Branch(Form("chi2_%i_%03d",m.fccd,(int)(round(m.dlf*100))), &v_chi2.at(m.ID));
+  tree.Branch("best_fccd", &best_fccd);
+  tree.Branch("best_dlf",  &best_dlf);
 
   for (size_t i=0; i<v_data.size(); i++) {
-    for (auto m : models) v_chi2.at(m.ID) = m.chi2.at(i);
+    for (auto m : models) {
+      v_chi2.at(m.ID) = m.chi2.at(i);
+      if (m.chi2.at(i) == 0) { best_fccd = m.fccd; best_dlf = m.dlf; } 
+    }
     tree.Fill();
   }
 
@@ -304,11 +310,11 @@ std::string get_filename(dlm_t model) {
   return get_filename(model.fccd, model.dlf);
 }
 
-std::string get_ofilename(bool toys, int channel, range_t r, std::string dir) {
+std::string get_ofilename(bool toys, int channel, int rebin, range_t r, std::string dir) {
   std::string ofname = "";
   if (dir!="") ofname = dir + "/";
   if (toys)    ofname += "toys_";
-  ofname += "ar39stat_ch"+std::to_string(channel) + "_";
+  ofname += "ar39stat_ch" + std::to_string(channel) + "_rebin" + std::to_string(rebin) + "_";
   ofname += std::to_string((int)r.emin)+"-"+std::to_string((int)r.emax)+".root";
 
   return ofname;
