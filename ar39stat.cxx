@@ -280,7 +280,7 @@ int main(int argc, char* argv[]) {
   for (auto m : models)
     tree.Branch(Form("chi2_%i_%03d",m.fccd,(int)(m.dlf*100)), &v_chi2.at(m.ID));
 
-  for (int i=0; i<toys; i++) {
+  for (size_t i=0; i<v_data.size(); i++) {
     for (auto m : models) v_chi2.at(m.ID) = m.chi2.at(i);
     tree.Fill();
   }
