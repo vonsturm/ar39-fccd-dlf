@@ -217,8 +217,7 @@ int main(int argc, char* argv[]) {
     m.hist = (TH1D*) fm.Get(Form("raw/M1_ch%i", channel));
     m.hist->Rebin(rebin);
     //add here the ratio between the integrals
-    float f_dlf = m.dlf*100;
-    m.hist->SetName(Form("model_fccd%d_dlf%03d",m.fccd,(int)(f_dlf)));
+    m.hist->SetName(Form("model_fccd%d_dlf%03d",m.fccd,(int)round(m.dlf*100)));
     m.chi2.resize(v_data.size());
     fm.Close();
   }
@@ -278,7 +277,7 @@ int main(int argc, char* argv[]) {
   TTree tree("statTree", "statTree");
   std::vector<double> v_chi2(models.size());
   for (auto m : models)
-    tree.Branch(Form("chi2_%i_%03d",m.fccd,(int)(m.dlf*100)), &v_chi2.at(m.ID));
+    tree.Branch(Form("chi2_%i_%03d",m.fccd,(int)(round(m.dlf*100))), &v_chi2.at(m.ID));
 
   for (size_t i=0; i<v_data.size(); i++) {
     for (auto m : models) v_chi2.at(m.ID) = m.chi2.at(i);
@@ -292,11 +291,10 @@ int main(int argc, char* argv[]) {
 }
 
 std::string get_filename(int fccd, double dlf) {
-  float f_dlf = dlf*100;
   std::string name = "ph2p-ar39/nplus-fccd";
   name += std::to_string(fccd);
   name += "um-dlf";
-  name += Form("%03d", (int)(f_dlf)); 
+  name += Form("%03d", (int)(round(dlf*100))); 
   name += "/lar/sur_array_1/Ar39/pdf-lar-sur_array_1-Ar39.root";
 
   return name;
