@@ -32,6 +32,9 @@
 // progress
 #include "progressbar/progressbar.hpp"
 
+// gedra-ar39-pdf
+#include "gerda-ar39-pdf/include/gerda_ar39_pdf.hpp"
+
 //own
 #include "args-reader/args_reader.hpp"
 #include "arbitrary_sampler.hpp"
@@ -68,6 +71,7 @@ void usage() {
   std::cout << "\t-r <opt>           : rebin\n";
   std::cout << "\t-o <opt>           : output directory\n";
   std::cout << "\t--test <opt>       : test statistics (0 = delta Chi2 => default, 1 = Chi2Test, 2 = KolmogorovTest)\n";
+  std::cout << "\t-i --interpolate   : use gerda-ar39-pdf to interpolate between discrete pdfs in fccd and dlf\n";
   std::cout << "\t-v                 : more output\n\n";
 }
 
@@ -94,6 +98,7 @@ int main(int argc, char* argv[]) {
 
   uint16_t rebin = 1;
   uint16_t teststat = 0;
+  bool interpolate = false;
   range_t fit_range(10000, 45, 160);
 
   std::vector<dlm_t> models;
@@ -122,8 +127,9 @@ int main(int argc, char* argv[]) {
     rebin  = j_conf.value("rebin",rebin);
     outdir = j_conf.value("output-dir",outdir);
     if (j_conf.contains("data")) {
-      infile = j_conf["data"].value("file",infile);
-      toys   = j_conf["data"].value("toys",toys);
+      infile  = j_conf["data"].value("file",infile);
+      channel = j_conf["data"].value("channel",channel);
+      toys    = j_conf["data"].value("toys",toys);
     }
     if (j_conf.contains("fit-range")) {
       fit_range = range_t( 
@@ -150,6 +156,9 @@ int main(int argc, char* argv[]) {
   }
 
   fetch_arg(args, "--test", teststat);
+  
+  fetch_arg(args, "-i", interpolate);
+  fetch_arg(args, "--interpolate", interpolate);
 
   fetch_arg(args, "--emin", fit_range.emin);
   fetch_arg(args, "--emax", fit_range.emax);
@@ -172,6 +181,7 @@ int main(int argc, char* argv[]) {
   if (verbose) {
     if (toys) std::cout << "Processing: gerda-factory toy MCs - " << infile << std::endl;
     else      std::cout << "Processing: Real Data - " << infile << std::endl;
+    std::cout << "channel : "    << channel        << "\n";
     std::cout << "binning : "    << rebin          << " keV\n";
     std::cout << "range   : "    << fit_range.emin << " - " << fit_range.emax  << " keV\n";
     std::cout << "test statistics: "; 
@@ -181,6 +191,8 @@ int main(int argc, char* argv[]) {
       case 2  : std::cout << "KolmogorovTest\n"; break;
       default : std::cout << "Test statistics not implemented using default: delta Chi2\n"; break;
     }
+    if (!interpolate)  std::cout << "DO NOT ";
+    std::cout << "USE gerda-ar39-pdf to interpolate between discrete pdfs\n"; 
   }
 
   // -------------------------------------------------------------------
@@ -202,7 +214,6 @@ int main(int argc, char* argv[]) {
     int hct = 0;
     for (auto && keyAsObj : *fin.GetListOfKeys()){
       auto key = (TKey*) keyAsObj;
-      //std::cout << key->GetName() << " " << key->GetClassName() << std::endl;
       if (std::string(key->GetClassName()) == "TH1D") {
         v_data[hct++] = dynamic_cast<TH1D*>( fin.Get(key->GetName()) );
       }
@@ -213,13 +224,30 @@ int main(int argc, char* argv[]) {
 
   // load model histograms 
   for (auto && m : models) {
-    TFile fm(get_filename(m).c_str());
-    m.hist = (TH1D*) fm.Get(Form("raw/M1_ch%i", channel));
+    std::string mname = Form("model_fccd%d_dlf%03d",m.fccd,(int)round(m.dlf*100));
+    std::string mtitle = mname + Form(";energy[keV];cts / %.1fkeV",v_data[0]->GetBinWidth(1)*rebin);
+    if (!interpolate) {
+      TFile fm(get_filename(m).c_str());
+      m.hist = (TH1D*) fm.Get(Form("raw/M1_ch%i", channel));
+      m.hist->SetName(mname.c_str());
+      m.hist->SetTitle(mtitle.c_str());
+      fm.Close();
+    }
+    else {
+      m.hist = new TH1D(mname.c_str(), mtitle.c_str(),
+        v_data[0]->GetNbinsX(),
+        v_data[0]->GetBinLowEdge(1),
+        v_data[0]->GetBinLowEdge(v_data[0]->GetNbinsX()+1));
+      // now fill the histogram
+      int nbins = m.hist->GetNbinsX();
+      for (int b = 1; b <= nbins; b++) {
+        double bin_center = m.hist->GetBinCenter(b);
+        double cont = gerda::ar39_pdf(channel, bin_center, m.fccd/1000., m.dlf) ;
+        m.hist->Fill(b,cont);
+      }
+    }
     m.hist->Rebin(rebin);
-    //add here the ratio between the integrals
-    m.hist->SetName(Form("model_fccd%d_dlf%03d",m.fccd,(int)round(m.dlf*100)));
     m.chi2.resize(v_data.size());
-    fm.Close();
   }
 
   progressbar bar(v_data.size());
