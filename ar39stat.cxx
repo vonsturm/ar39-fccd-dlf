@@ -181,9 +181,9 @@ int main(int argc, char* argv[]) {
   if (verbose) {
     if (toys) std::cout << "Processing: gerda-factory toy MCs - " << infile << std::endl;
     else      std::cout << "Processing: Real Data - " << infile << std::endl;
-    std::cout << "channel : "    << channel        << "\n";
-    std::cout << "binning : "    << rebin          << " keV\n";
-    std::cout << "range   : "    << fit_range.emin << " - " << fit_range.emax  << " keV\n";
+    std::cout << "channel : " << channel        << "\n";
+    std::cout << "rebin : "   << rebin          << "\n";
+    std::cout << "range   : " << fit_range.emin << " - " << fit_range.emax  << " keV\n";
     std::cout << "test statistics: "; 
     switch (teststat) {
       case 0  : std::cout << "delta Chi2\n";     break;
@@ -259,11 +259,25 @@ int main(int argc, char* argv[]) {
   for (auto && data : v_data) {
     // rebin
     data->Rebin(rebin);
+
+    // check binning
+    double bw_data = data->GetBinWidth(1);
+    if (verbose && i==1) std::cout << "binning : " << bw_data << "keV\n";
+
     bar.update();
 
     double min_chi2 = 10000.;
 
     for (auto && m : models) {
+
+      // check binning
+      double bw_m = m.hist->GetBinWidth(1);
+      if ( bw_data != bw_m ) {
+        std::cout << "Error: Bin width data[" << i << "] " << bw_data << "keV"
+                  <<  "/ model [fccd " << m.fccd << ", dlf" << m.dlf << "] " << bw_m << "keV are different\n";
+        exit(EXIT_FAILURE);
+      }
+
       m.hist->GetXaxis()->SetRangeUser(fit_range.emin,fit_range.emax);
       data  ->GetXaxis()->SetRangeUser(fit_range.emin,fit_range.emax);
 
