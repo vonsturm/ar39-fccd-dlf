@@ -207,7 +207,7 @@ int main(int argc, char* argv[]) {
   // fill data/toys vector
   std::vector<TH1D*> v_data(100000);
   if (!toys) {
-    v_data[0] = dynamic_cast<TH1D*>( fin.Get(Form("raw/M1_%i",channel)) );
+    v_data[0] = dynamic_cast<TH1D*>( fin.Get(Form("raw/M1_ch%i",channel)) );
     v_data.resize(1);
   }
   else {
@@ -221,7 +221,7 @@ int main(int argc, char* argv[]) {
     v_data.resize(hct);
   }
   fin.Close();
-
+  
   // load model histograms 
   for (auto && m : models) {
     std::string mname = Form("model_fccd%d_dlf%03d",m.fccd,(int)round(m.dlf*100));
@@ -296,11 +296,11 @@ int main(int argc, char* argv[]) {
       m.hist->GetXaxis()->SetRangeUser(fit_range.emin,fit_range.emax);
       data  ->GetXaxis()->SetRangeUser(fit_range.emin,fit_range.emax);
 
-      if (data->Integral(fit_range.emin,fit_range.emax) < 10) {
+      if (data->Integral(data->FindBin(fit_range.emin),data->FindBin(fit_range.emax)) < 10) {
         std::cout << "\nEmpty Hist: " << data->GetName() << " " << data->Integral() << std::endl;
         exit(EXIT_FAILURE);
       }
-      if (m.hist->Integral(fit_range.emin,fit_range.emax) < 10) {
+      if (m.hist->Integral(m.hist->FindBin(fit_range.emin),m.hist->FindBin(fit_range.emax)) < 10) {
         std::cout << "\nEmpty Hist: " << m.hist->GetName() << " " << m.hist->Integral() << std::endl;
         exit(EXIT_FAILURE);
       }
