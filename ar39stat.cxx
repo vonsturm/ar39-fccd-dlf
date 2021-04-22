@@ -77,7 +77,7 @@ void usage() {
 
 std::string get_filename(dlm_t model);
 std::string get_filename(int fccd, double dlf);
-std::string get_ofilename(bool toys, int channel, int rebin, range_t r, std::string dir);
+std::string get_ofilename(bool toys, int channel, int rebin, range_t r);
 std::string get_treename(int channel, range_t r);
 
 int main(int argc, char* argv[]) {
@@ -242,9 +242,16 @@ int main(int argc, char* argv[]) {
       int nbins = m.hist->GetNbinsX();
       for (int b = 1; b <= nbins; b++) {
         double bin_center = m.hist->GetBinCenter(b);
-        double cont = gerda::ar39_pdf(channel, bin_center, m.fccd/1000., m.dlf) ;
-        m.hist->Fill(b,cont);
+        double cont = 0.;
+        if (fit_range.emin-10. <= bin_center && bin_center <= fit_range.emax+10.) {
+          cont = gerda::ar39_pdf(channel, bin_center, m.fccd/1000., m.dlf);
+        }
+        else
+          cont = 0.;
+        m.hist->SetBinContent(b,cont);
+        m.hist->SetBinError(b,0.);
       }
+      m.hist->Scale(1000.*(fit_range.emax-fit_range.emin)/(m.hist->GetBinWidth(1)*rebin)/m.hist->Integral(fit_range.emin,fit_range.emax));
     }
     m.hist->Rebin(rebin);
     m.chi2.resize(v_data.size());
@@ -262,6 +269,7 @@ int main(int argc, char* argv[]) {
 
     // check binning
     double bw_data = data->GetBinWidth(1);
+    int nxbins_data = data->GetNbinsX();
     if (verbose && i==1) std::cout << "binning : " << bw_data << "keV\n";
 
     bar.update();
@@ -272,9 +280,16 @@ int main(int argc, char* argv[]) {
 
       // check binning
       double bw_m = m.hist->GetBinWidth(1);
-      if ( bw_data != bw_m ) {
-        std::cout << "Error: Bin width data[" << i << "] " << bw_data << "keV"
+      int nxbins_m = m.hist->GetNbinsX();
+
+      if (bw_data != bw_m) {
+        std::cout << "\nError: Bin width data[" << i << "] " << bw_data << "keV"
                   <<  "/ model [fccd " << m.fccd << ", dlf" << m.dlf << "] " << bw_m << "keV are different\n";
+        exit(EXIT_FAILURE);
+      }
+      if (nxbins_data != nxbins_m) {
+        std::cout << "\nError: N Bins X data[" << i << "] " << nxbins_data
+                  <<  "/ model [fccd " << m.fccd << ", dlf" << m.dlf << "] " << nxbins_m << " are different\n";
         exit(EXIT_FAILURE);
       }
 
@@ -308,24 +323,31 @@ int main(int argc, char* argv[]) {
   }
   std::cout << "\n";
 
-  // model histograms are not needed anymore at this point
+  // create outdir if it does not exist
+  if (outdir!="") system(Form("mkdir -p %s",outdir.c_str()));
+
+  // save model histograms to file if interpolate is given
+  if (interpolate) {
+    TFile ofh((outdir+"/imodels_"+get_ofilename(toys,channel,rebin,fit_range)).c_str(),"RECREATE");
+    for (auto && m : models) m.hist->Write();
+    ofh.Close();
+  }
+
+  // model and data histograms are not needed anymore at this point
   for (auto && m : models) { delete m.hist; m.hist = nullptr; }
   for (auto && d : v_data) { delete d; d = nullptr; }
 
-  // dump everything to file
-  if (outdir!="") system(Form("mkdir -p %s",outdir.c_str()));
-
-  TFile of(get_ofilename(toys,channel,rebin,fit_range,outdir).c_str(),"RECREATE");
+  TFile of((outdir+"/"+get_ofilename(toys,channel,rebin,fit_range)).c_str(),"RECREATE");
   TTree tree("statTree", "statTree");
   std::vector<double> v_chi2(models.size());
   int best_fccd = 0; double best_dlf = 0;
-  for (auto m : models)
+  for (auto && m : models)
     tree.Branch(Form("chi2_%i_%03d",m.fccd,(int)(round(m.dlf*100))), &v_chi2.at(m.ID));
   tree.Branch("best_fccd", &best_fccd);
   tree.Branch("best_dlf",  &best_dlf);
 
   for (size_t i=0; i<v_data.size(); i++) {
-    for (auto m : models) {
+    for (auto && m : models) {
       v_chi2.at(m.ID) = m.chi2.at(i);
       if (m.chi2.at(i) == 0) { best_fccd = m.fccd; best_dlf = m.dlf; } 
     }
@@ -352,10 +374,9 @@ std::string get_filename(dlm_t model) {
   return get_filename(model.fccd, model.dlf);
 }
 
-std::string get_ofilename(bool toys, int channel, int rebin, range_t r, std::string dir) {
+std::string get_ofilename(bool toys, int channel, int rebin, range_t r) {
   std::string ofname = "";
-  if (dir!="") ofname = dir + "/";
-  if (toys)    ofname += "toys_";
+  if (toys)   ofname += "toys_";
   ofname += "ar39stat_ch" + std::to_string(channel) + "_rebin" + std::to_string(rebin) + "_";
   ofname += std::to_string((int)r.emin)+"-"+std::to_string((int)r.emax)+".root";
 
