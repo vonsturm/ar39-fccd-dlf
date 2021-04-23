@@ -347,10 +347,14 @@ int main(int argc, char* argv[]) {
   tree.Branch("best_dlf",  &best_dlf);
 
   for (size_t i=0; i<v_data.size(); i++) {
+    // fill model vector
+    for (auto && m : models) v_chi2.at(m.ID) = m.chi2.at(i);
+    // find minimum
+    double min_llh = *std::min_element(std::begin(v_chi2),std::end(v_chi2));
+    // minimum corrisponds to best fit
     for (auto && m : models) {
-      v_chi2.at(m.ID) = m.chi2.at(i);
-      if (m.chi2.at(i) == 0) { best_fccd = m.fccd; best_dlf = m.dlf; } 
-    }
+      if (m.chi2.at(i) == min_llh) { best_fccd = m.fccd; best_dlf = m.dlf; } 
+    } 
     tree.Fill();
   }
 
