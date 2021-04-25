@@ -68,6 +68,7 @@ void usage() {
   std::cout << "\t--json <opt>       : master config file [conf.json]\n";
   std::cout << "\t--emin <opt>       : minimum energy for chi2 test [45-100]\n";
   std::cout << "\t--emax <opt>       : maximum energy for chi2 test [100-200]\n";
+  std::cout << "\t-c --channel <opt> : channel\n";
   std::cout << "\t-r <opt>           : rebin\n";
   std::cout << "\t-o <opt>           : output directory\n";
   std::cout << "\t--test <opt>       : test statistics (0 = delta Chi2 => default, 1 = Chi2Test, 2 = KolmogorovTest)\n";
@@ -109,13 +110,13 @@ int main(int argc, char* argv[]) {
   std::vector<std::string> args(argc);
   for (int i = 0; i < argc; ++i) args.at(i) = argv[i];
 
-  fetch_arg(args, "--help", help);
-  fetch_arg(args, "-h",     help);
+  args_reader::fetch_arg(args, "--help", help);
+  args_reader::fetch_arg(args, "-h",     help);
 
   if (help) {usage(); return 1;}
 
-  fetch_arg(args, "-v",     verbose);
-  bool found = fetch_arg(args, "--json", conf);
+  args_reader::fetch_arg(args, "-v",     verbose);
+  bool found = args_reader::fetch_arg(args, "--json", conf);
 
   if (found) {
     std::ifstream f_conf(conf);
@@ -155,16 +156,18 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  fetch_arg(args, "--test", teststat);
+  args_reader::fetch_arg(args, "--test", teststat);
   
-  fetch_arg(args, "-i", interpolate);
-  fetch_arg(args, "--interpolate", interpolate);
+  args_reader::fetch_arg(args, "-i", interpolate);
+  args_reader::fetch_arg(args, "--interpolate", interpolate);
 
-  fetch_arg(args, "--emin", fit_range.emin);
-  fetch_arg(args, "--emax", fit_range.emax);
+  args_reader::fetch_arg(args, "--emin", fit_range.emin);
+  args_reader::fetch_arg(args, "--emax", fit_range.emax);
+  args_reader::fetch_arg(args, "-c",     channel);
+  args_reader::fetch_arg(args, "--channel",     channel);
 
-  fetch_arg(args, "-r", rebin  );
-  fetch_arg(args, "-o", outdir );
+  args_reader::fetch_arg(args, "-r", rebin  );
+  args_reader::fetch_arg(args, "-o", outdir );
 
   // -------------------------------------------------------------------
   // check input parameters
