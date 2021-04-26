@@ -24,7 +24,10 @@
 #include "TH1D.h"
 #include "TFile.h"
 #include "TTree.h"
+#include "TCanvas.h"
+#include "TGraph2D.h"
 #include "TRandom2.h"
+#include "TStyle.h"
 
 // json
 #include "json.hpp"
@@ -245,16 +248,18 @@ int main(int argc, char* argv[]) {
       int nbins = m.hist->GetNbinsX();
       for (int b = 1; b <= nbins; b++) {
         double bin_center = m.hist->GetBinCenter(b);
-        double cont = 0.;
         if (fit_range.emin-10. <= bin_center && bin_center <= fit_range.emax+10.) {
-          cont = gerda::ar39_pdf(channel, bin_center, m.fccd/1000., m.dlf);
+          double cont = gerda::ar39_pdf(channel, bin_center, m.fccd/1000., m.dlf);
+          m.hist->SetBinContent(b,cont);
         }
-        else
-          cont = 0.;
-        m.hist->SetBinContent(b,cont);
         m.hist->SetBinError(b,0.);
       }
-      m.hist->Scale(1000.*(fit_range.emax-fit_range.emin)/(m.hist->GetBinWidth(1)*rebin)/m.hist->Integral(fit_range.emin,fit_range.emax));
+      auto bin_emin = m.hist->FindBin(fit_range.emin);
+      auto bin_emax = m.hist->FindBin(fit_range.emax);
+      double integral = m.hist->Integral(bin_emin,bin_emax);
+
+      double scale = 1000.*(fit_range.emax-fit_range.emin)/(m.hist->GetBinWidth(1)*rebin)/integral;
+      m.hist->Scale(scale);
     }
     m.hist->Rebin(rebin);
     m.chi2.resize(v_data.size());
@@ -276,8 +281,6 @@ int main(int argc, char* argv[]) {
     if (verbose && i==1) std::cout << "binning : " << bw_data << "keV\n";
 
     bar.update();
-
-    double min_chi2 = 10000.;
 
     for (auto && m : models) {
 
@@ -309,19 +312,10 @@ int main(int argc, char* argv[]) {
       }
 
       switch (teststat) {
-        case 1  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2"); break;
         case 2  : m.chi2.at(i) = data->KolmogorovTest(m.hist);      break;
-        default : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2");
-                  min_chi2 = m.chi2.at(i) < min_chi2 ? m.chi2.at(i) : min_chi2;
-                  break;
+        default : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2"); break;
       }
     }
-
-    // implement delta chi2 here
-    if (teststat == 0 or teststat > 2) {
-      for (auto && m : models) m.chi2.at(i) -= min_chi2;
-    }
-
     i++;
   }
   std::cout << "\n";
@@ -336,10 +330,6 @@ int main(int argc, char* argv[]) {
     ofh.Close();
   }
 
-  // model and data histograms are not needed anymore at this point
-  for (auto && m : models) { delete m.hist; m.hist = nullptr; }
-  for (auto && d : v_data) { delete d; d = nullptr; }
-
   TFile of((outdir+"/"+get_ofilename(toys,channel,rebin,fit_range)).c_str(),"RECREATE");
   TTree tree("statTree", "statTree");
   std::vector<double> v_chi2(models.size());
@@ -349,20 +339,52 @@ int main(int argc, char* argv[]) {
   tree.Branch("best_fccd", &best_fccd);
   tree.Branch("best_dlf",  &best_dlf);
 
+  auto min_llh = std::begin(v_chi2);
+
   for (size_t i=0; i<v_data.size(); i++) {
     // fill model vector
     for (auto && m : models) v_chi2.at(m.ID) = m.chi2.at(i);
     // find minimum
-    double min_llh = *std::min_element(std::begin(v_chi2),std::end(v_chi2));
+    min_llh = std::min_element(std::begin(v_chi2),std::end(v_chi2));
+    // delta chi2
+    if (teststat == 0 || teststat > 2) {
+      std::transform(std::begin(v_chi2), std::end(v_chi2), std::begin(v_chi2), [c=*min_llh](double x) { return x -= c; } );
+    }
     // minimum corrisponds to best fit
-    for (auto && m : models) {
-      if (m.chi2.at(i) == min_llh) { best_fccd = m.fccd; best_dlf = m.dlf; } 
-    } 
+    best_fccd = models.at(min_llh-std::begin(v_chi2)).fccd;
+    best_dlf = models.at(min_llh-std::begin(v_chi2)).dlf;
     tree.Fill();
   }
 
   tree.Write();
   of.Close();
+
+  if (!toys) {
+    TFile ofh((outdir+"/bestfit_"+get_ofilename(toys,channel,rebin,fit_range)).c_str(),"RECREATE");
+    // Canvas with data and best model
+    TCanvas * c = new TCanvas("c","c",1000,500);
+    v_data[0]->SetLineColor(kAzure);
+    v_data[0]->Draw("hist");
+    TH1D * hm = models.at(min_llh-std::begin(v_chi2)).hist;
+    hm->SetLineColor(kRed);
+    hm->Draw("hist same");
+    c->Write("best_fit");
+
+    // Canvas with TS profile
+    TGraph2D * gr = new TGraph2D();
+    int N = 0;
+    for (auto chi2 : v_chi2) { 
+      gr->SetPoint(N, models.at(N).fccd, models.at(N).dlf, chi2);
+      N++;
+    }
+    gr->SetTitle("ts_profile; fccd [#mum]; dlf");
+    gr->Write("ts_profile");
+    ofh.Close();
+  }
+
+  // model and data histograms are not needed anymore at this point
+  for (auto && m : models) { delete m.hist; m.hist = nullptr; }
+  for (auto && d : v_data) { delete d; d = nullptr; }
 
   return 0;
 }
