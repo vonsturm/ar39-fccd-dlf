@@ -265,7 +265,7 @@ int main(int argc, char* argv[]) {
     m.chi2.resize(v_data.size());
   }
 
-  progressbar bar(v_data.size());
+  progressbar bar(toys ? v_data.size() : models.size());
   bar.set_done_char("-");
 
   if (toys) std::cout << "Number of toys: " << v_data.size() << std::endl;
@@ -280,9 +280,11 @@ int main(int argc, char* argv[]) {
     int nxbins_data = data->GetNbinsX();
     if (verbose && i==1) std::cout << "binning : " << bw_data << "keV\n";
 
-    bar.update();
+    if (toys) bar.update();
 
     for (auto && m : models) {
+
+      if (!toys) bar.update();
 
       // check binning
       double bw_m = m.hist->GetBinWidth(1);
