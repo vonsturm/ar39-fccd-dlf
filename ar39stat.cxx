@@ -22,6 +22,7 @@
 
 // root cern
 #include "TH1D.h"
+#include "TH2D.h"
 #include "TFile.h"
 #include "TTree.h"
 #include "TCanvas.h"
@@ -81,8 +82,9 @@ void usage() {
 
 std::string get_filename(dlm_t model);
 std::string get_filename(int fccd, double dlf);
-std::string get_ofilename(bool toys, int channel, int rebin, range_t r);
+std::string get_ofilename(bool toys, bool interpolate, int channel, int rebin, range_t r);
 std::string get_treename(int channel, range_t r);
+void scale_TH1D_to_integral(TH1D * h, range_t range);
 
 int main(int argc, char* argv[]) {
 
@@ -98,6 +100,7 @@ int main(int argc, char* argv[]) {
   std::string conf   = "";
   std::string infile = "";
   std::string outdir = "";
+  std::string prefix = "";
   uint16_t channel = 0;
 
   uint16_t rebin = 1;
@@ -116,45 +119,60 @@ int main(int argc, char* argv[]) {
   args_reader::fetch_arg(args, "--help", help);
   args_reader::fetch_arg(args, "-h",     help);
 
-  if (help) {usage(); return 1;}
+  if (help) {usage(); return 0;}
 
   args_reader::fetch_arg(args, "-v",     verbose);
   bool found = args_reader::fetch_arg(args, "--json", conf);
 
-  if (found) {
-    std::ifstream f_conf(conf);
-    json j_conf; f_conf >> j_conf;
+  if (!found) {
+    std::cout << "Error: --json option is mandatory\n\n";
+    usage();
+    return 1;
+  }
 
-    j_conf.value("verbose",verbose);
-    if (verbose) std::cout << "---Found master conf---\n";
+  // read master config file
+  std::ifstream f_conf(conf);
+  if (!f_conf.is_open()) {
+    std::cout << "Error: Could not open config file: " << conf << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
-    rebin  = j_conf.value("rebin",rebin);
-    outdir = j_conf.value("output-dir",outdir);
-    if (j_conf.contains("data")) {
-      infile  = j_conf["data"].value("file",infile);
-      channel = j_conf["data"].value("channel",channel);
-      toys    = j_conf["data"].value("toys",toys);
-    }
-    if (j_conf.contains("fit-range")) {
-      fit_range = range_t( 
-        0,
-        j_conf["fit-range"].value("emin",45),
-        j_conf["fit-range"].value("emax",160)
-      );
-    }
+  json j_conf; f_conf >> j_conf;
 
-    if (j_conf.contains("models")) {
-      int ID = 0;
-      int fccd_start = j_conf["models"]["fccd"]["start"].get<int>(); 
-      int fccd_stop  = j_conf["models"]["fccd"]["stop"].get<int>(); 
-      int fccd_step  = j_conf["models"]["fccd"]["step"].get<int>(); 
-      double dlf_start = j_conf["models"]["dlf"]["start"].get<double>(); 
-      double dlf_stop  = j_conf["models"]["dlf"]["stop"].get<double>(); 
-      double dlf_step  = j_conf["models"]["dlf"]["step"].get<double>(); 
-      for (int f = fccd_start; f <= fccd_stop; f += fccd_step ) {
-        for (double d = dlf_start; d <= dlf_stop; d += dlf_step ) {
-          models.emplace_back(ID++, f, d, std::vector<double>()); // chi
-        }
+  j_conf.value("verbose",verbose);
+  if (verbose) std::cout << "---Found master conf---\n";
+
+  rebin  = j_conf.value("rebin",rebin);
+  outdir = j_conf.value("output-dir",outdir);
+  prefix = j_conf.value("output-file-prefix",prefix);
+
+  if (j_conf.contains("data")) {
+    infile  = j_conf["data"].value("file",infile);
+    channel = j_conf["data"].value("channel",channel);
+    toys    = j_conf["data"].value("toys",toys);
+  }
+
+  if (j_conf.contains("fit-range")) {
+    fit_range = range_t( 
+      0,
+      j_conf["fit-range"].value("emin",45),
+      j_conf["fit-range"].value("emax",160)
+    );
+  }
+
+  int fccd_start = 650, fccd_stop = 2400, fccd_step = 100;
+  double dlf_start = 0., dlf_stop = 1., dlf_step = 0.1;
+  if (j_conf.contains("models")) {
+    int ID = 0;
+    fccd_start = j_conf["models"]["fccd"].value("start", 650); 
+    fccd_stop  = j_conf["models"]["fccd"].value("stop", 2400); 
+    fccd_step  = j_conf["models"]["fccd"].value("step",  100); 
+    dlf_start  = j_conf["models"]["dlf"] .value("start", 0.); 
+    dlf_stop   = j_conf["models"]["dlf"] .value("stop",  1.); 
+    dlf_step   = j_conf["models"]["dlf"] .value("step", 0.1); 
+    for (int f = fccd_start; f <= fccd_stop; f += fccd_step ) {
+      for (double d = dlf_start; d <= dlf_stop; d += dlf_step ) {
+        models.emplace_back(ID++, f, d, std::vector<double>()); // chi
       }
     }
   }
@@ -206,7 +224,7 @@ int main(int argc, char* argv[]) {
   // -------------------------------------------------------------------
   TFile fin(infile.c_str());
   if (fin.IsZombie() or !fin.IsOpen()) {
-    std::cout << "Could not open file: " << infile << std::endl;
+    std::cout << "Error: Could not open data file: " << infile << std::endl;
     exit(EXIT_FAILURE);
   }
 
@@ -278,7 +296,7 @@ int main(int argc, char* argv[]) {
     // check binning
     double bw_data = data->GetBinWidth(1);
     int nxbins_data = data->GetNbinsX();
-    if (verbose && i==1) std::cout << "binning : " << bw_data << "keV\n";
+    if (verbose && i==0) std::cout << "binning : " << bw_data << "keV\n";
 
     if (toys) bar.update();
 
@@ -322,17 +340,8 @@ int main(int argc, char* argv[]) {
   }
   std::cout << "\n";
 
-  // create outdir if it does not exist
-  if (outdir!="") system(Form("mkdir -p %s",outdir.c_str()));
-
-  // save model histograms to file if interpolate is given
-  if (interpolate) {
-    TFile ofh((outdir+"/imodels_"+get_ofilename(toys,channel,rebin,fit_range)).c_str(),"RECREATE");
-    for (auto && m : models) m.hist->Write();
-    ofh.Close();
-  }
-
-  TFile of((outdir+"/"+get_ofilename(toys,channel,rebin,fit_range)).c_str(),"RECREATE");
+  system(Form("mkdir -p %s",outdir.c_str()));
+  TFile of((outdir+"/"+prefix+get_ofilename(toys,interpolate,channel,rebin,fit_range)).c_str(),"RECREATE");
   TTree tree("statTree", "statTree");
   std::vector<double> v_chi2(models.size());
   int best_fccd = 0; double best_dlf = 0;
@@ -362,25 +371,51 @@ int main(int argc, char* argv[]) {
   of.Close();
 
   if (!toys) {
-    TFile ofh((outdir+"/bestfit_"+get_ofilename(toys,channel,rebin,fit_range)).c_str(),"RECREATE");
-    // Canvas with data and best model
-    TCanvas * c = new TCanvas("c","c",1000,500);
+    TFile ofh((outdir+"/bestfit_"+prefix+get_ofilename(toys,interpolate,channel,rebin,fit_range)).c_str(),"RECREATE");
+    // Canvas with data, best model and range in DLF
+    TCanvas * c1 = new TCanvas("c_dlf","c_dlf",1000,500);
+    scale_TH1D_to_integral(v_data[0], fit_range);
     v_data[0]->SetLineColor(kAzure);
     v_data[0]->Draw("hist");
-    TH1D * hm = models.at(min_llh-std::begin(v_chi2)).hist;
-    hm->SetLineColor(kRed);
-    hm->Draw("hist same");
-    c->Write("best_fit");
+    std::vector<TH1D*> v_hm_dlf;
+    for (int i = -2; i < 3; i++) {
+      v_hm_dlf.push_back( models.at(min_llh-std::begin(v_chi2)+i).hist );
+      if (i==0) v_hm_dlf.back()->SetLineColor(kRed);
+      else      v_hm_dlf.back()->SetLineColor(kGreen+1);
+    }
+    for (auto & hm : v_hm_dlf) {
+      scale_TH1D_to_integral(hm, fit_range);
+      hm->Draw("hist same");
+    }
+    c1->Write("best_fit_dlf");
+
+    // Canvas with data, best model and range in FCCD
+    TCanvas * c2 = new TCanvas("c_fccd","c_fccd",1000,500);
+    v_data[0]->Draw("hist");
+    std::vector<TH1D*> v_hm_fccd;
+    int delta_fccd = (fccd_stop-fccd_start)/fccd_step+1;
+    for (int i = -2; i < 3; i++) {
+      v_hm_fccd.push_back( models.at(min_llh-std::begin(v_chi2)+i*delta_fccd).hist );
+      if (i==0) v_hm_fccd.back()->SetLineColor(kRed);
+      else      v_hm_fccd.back()->SetLineColor(kGreen+1);
+    }
+    for (auto & hm : v_hm_fccd) {
+      scale_TH1D_to_integral(hm, fit_range);
+      hm->Draw("hist same");
+    }
+    c2->Write("best_fit_fccd");
 
     // Canvas with TS profile
-    TGraph2D * gr = new TGraph2D();
+    TH2D * ts_profile = new TH2D("ts_profile","ts_profile",
+      (fccd_stop-fccd_start)/fccd_step+1,fccd_start-fccd_step/2,fccd_stop+fccd_step/2,
+      round((dlf_stop-dlf_start)/dlf_step)+1,dlf_start-dlf_step/2,dlf_stop+dlf_step/2);
     int N = 0;
-    for (auto chi2 : v_chi2) { 
-      gr->SetPoint(N, models.at(N).fccd, models.at(N).dlf, chi2);
+    for (auto chi2 : v_chi2) {
+      ts_profile->Fill(models.at(N).fccd, models.at(N).dlf, chi2);
       N++;
     }
-    gr->SetTitle("ts_profile; fccd [#mum]; dlf");
-    gr->Write("ts_profile");
+    ts_profile->SetTitle("ts_profile; fccd [#mum]; dlf");
+    ts_profile->Write();
     ofh.Close();
   }
 
@@ -405,10 +440,11 @@ std::string get_filename(dlm_t model) {
   return get_filename(model.fccd, model.dlf);
 }
 
-std::string get_ofilename(bool toys, int channel, int rebin, range_t r) {
-  std::string ofname = "";
+std::string get_ofilename(bool toys, bool interpolate, int channel, int rebin, range_t r) {
+  std::string ofname = "ar39stat_";
   if (toys)   ofname += "toys_";
-  ofname += "ar39stat_ch" + std::to_string(channel) + "_rebin" + std::to_string(rebin) + "_";
+  if (interpolate) ofname += "mipol_";
+  ofname += "ch" + std::to_string(channel) + "_rebin" + std::to_string(rebin) + "_";
   ofname += std::to_string((int)r.emin)+"-"+std::to_string((int)r.emax)+".root";
 
   return ofname;
@@ -419,4 +455,8 @@ std::string get_treename(int channel, range_t r) {
     "_range"+std::to_string((int)r.emin)+"_"+std::to_string((int)r.emax);
 
   return treename;
+}
+
+void scale_TH1D_to_integral(TH1D * h, range_t range) {
+  h->Scale(1./h->Integral(h->FindBin(range.emin), h->FindBin(range.emax)));
 }
