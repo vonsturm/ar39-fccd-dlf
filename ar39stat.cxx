@@ -243,7 +243,8 @@ int main(int argc, char* argv[]) {
         for (int b = 1; b <= v_data[hct]->GetNbinsX(); b++) {
           double cont = v_data[hct]->GetBinContent(b);
           v_data[hct]->SetBinContent(b,0);
-          v_data[hct]->Fill(v_data[hct]->GetBinCenter(b),cont);
+          for (int i = 0; i < cont; i++)
+            v_data[hct]->Fill(v_data[hct]->GetBinCenter(b));
         }
         hct++;
       }
