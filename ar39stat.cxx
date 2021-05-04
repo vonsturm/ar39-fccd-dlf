@@ -196,7 +196,7 @@ int main(int argc, char* argv[]) {
   if (fit_range.emin > fit_range.emax) { std::cout << "Error: Fit range minimum greater than maxium. Aborting.\n";        exit(EXIT_FAILURE); }
   if (fit_range.emin < 45)             { std::cout << "Fit range minimum too small " << fit_range.emin << " Aborting.\n"; exit(EXIT_FAILURE); }
   if (fit_range.emax > 2000)           { std::cout << "Fit range maximum too large " << fit_range.emax << " Aborting.\n"; exit(EXIT_FAILURE); }
-  if (rebin<1 or rebin>10)             { std::cout << "Rebin allowed range 1-10 keV : " << rebin << " keV. Aborting.\n";  exit(EXIT_FAILURE); }
+  if (rebin<1 or rebin>100)            { std::cout << "Rebin allowed range 1-100 : " << rebin << " Aborting.\n";  exit(EXIT_FAILURE); }
 
   // -------------------------------------------------------------------
   // print input parameters
@@ -239,7 +239,13 @@ int main(int argc, char* argv[]) {
     for (auto && keyAsObj : *fin.GetListOfKeys()){
       auto key = (TKey*) keyAsObj;
       if (std::string(key->GetClassName()) == "TH1D") {
-        v_data[hct++] = dynamic_cast<TH1D*>( fin.Get(key->GetName()) );
+        v_data[hct] = dynamic_cast<TH1D*>( fin.Get(key->GetName()) );
+        for (int b = 1; b <= v_data[hct]->GetNbinsX(); b++) {
+          double cont = v_data[hct]->GetBinContent(b);
+          v_data[hct]->SetBinContent(b,0);
+          v_data[hct]->Fill(v_data[hct]->GetBinCenter(b),cont);
+        }
+        hct++;
       }
     }
     v_data.resize(hct);
@@ -252,7 +258,7 @@ int main(int argc, char* argv[]) {
     std::string mtitle = mname + Form(";energy[keV];cts / %.1fkeV",v_data[0]->GetBinWidth(1)*rebin);
     if (!interpolate) {
       TFile fm(get_filename(m).c_str());
-      m.hist = (TH1D*) fm.Get(Form("raw/M1_ch%i", channel));
+      m.hist = dynamic_cast<TH1D*>( fm.Get(Form("raw/M1_ch%i", channel)) );
       m.hist->SetName(mname.c_str());
       m.hist->SetTitle(mtitle.c_str());
       fm.Close();
