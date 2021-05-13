@@ -399,7 +399,7 @@ int main(int argc, char* argv[]) {
     // find minimum
     min_llh = std::min_element(std::begin(v_chi2),std::end(v_chi2));
     // delta chi2
-    if (teststat%2 == 0) {
+    if (teststat%2 == 1) {
       std::transform(std::begin(v_chi2), std::end(v_chi2), std::begin(v_chi2), [c=*min_llh](double x) { return x -= c; } );
     }
     // minimum corrisponds to best fit
