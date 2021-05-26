@@ -76,7 +76,7 @@ void usage() {
   std::cout << "\t-c --channel <opt> : channel\n";
   std::cout << "\t-r <opt>           : rebin\n";
   std::cout << "\t-o <opt>           : output directory\n";
-  std::cout << "\t--test <opt>       : test statistics (0 = delta Chi2 => default, 1 = Chi2Test, 2 = KolmogorovTest)\n";
+  std::cout << "\t--test <opt>       : test statistics (0,1 = Chi2Test, 2,3 = KolmogorovTest, 4,5 = Chi2 calculated by-hand)\n";
   std::cout << "\t-i --interpolate   : use gerda-ar39-pdf to interpolate between discrete pdfs in fccd and dlf\n";
   std::cout << "\t-v                 : more output\n\n";
 }
@@ -87,6 +87,7 @@ std::string get_ofilename(bool toys, bool interpolate, int channel, int rebin, r
 std::string get_treename(int channel, range_t r);
 void scale_TH1D_to_integral(TH1D * h, range_t range);
 double GetChi2(TH1D * h_data, TH1D * h_model, range_t range);
+double GetChi2Opt(TH1D * h_data, TH1D * h_model, range_t range);
 
 int main(int argc, char* argv[]) {
 
@@ -218,6 +219,8 @@ int main(int argc, char* argv[]) {
       case 3  : std::cout << "delta KolmogorovTest\n"; break;
       case 4  : std::cout << "Chi2\n";                 break;
       case 5  : std::cout << "delta Chi2\n";           break;
+      case 6  : std::cout << "Chi2 norm. opt.\n";      break;
+      case 7  : std::cout << "delta Chi2 norm. opt.\n";break;
       default : std::cout << "Test statistics not implemented using default: delta Chi2\n"; break;
     }
     if (!interpolate)  std::cout << "DO NOT ";
@@ -280,7 +283,7 @@ int main(int argc, char* argv[]) {
       int nbins = m.hist->GetNbinsX();
       for (int b = 1; b <= nbins; b++) {
         double bin_center = m.hist->GetBinCenter(b);
-        if (0. <= bin_center && bin_center <= 500.) {
+        if (30. <= bin_center && bin_center <= 300.) {
           double cont = gerda::ar39_pdf(channel, bin_center, m.fccd/1000., m.dlf);
           m.hist->SetBinContent(b,cont);
         }
@@ -305,13 +308,14 @@ int main(int argc, char* argv[]) {
         m.hist->DrawCopy(i == 0 ? "hist" : "hist same");
         i++;
       }
-      if (m.fccd == 1750) {
+      if (m.fccd == 1800) {
         cm_dlf->cd();
         m.hist->SetLineColor( j%2==0 ? kRed : kBlue );
         m.hist->DrawCopy(j == 0 ? "hist" : "hist same");
         j++;
       }
-      //ofh.cd(); m.hist->Write();
+      // write grid point histograms for dlf 0.6 to file
+      if (m.fccd%50 == 0 && round(m.dlf*100) == 60) { ofh.cd(); m.hist->Write(); }
     }
     cm_fccd->Write();
     cm_dlf->Write();
@@ -374,6 +378,9 @@ int main(int argc, char* argv[]) {
         case 2  : m.chi2.at(i) = data->KolmogorovTest(m.hist);      break; // KolmogorovTest
         case 3  : m.chi2.at(i) = data->KolmogorovTest(m.hist);      break; // KolmogorovTest delta
         case 4  : m.chi2.at(i) = GetChi2(data,m.hist,fit_range); break; // Chi2 by-hand
+        case 5  : m.chi2.at(i) = GetChi2(data,m.hist,fit_range); break; // Chi2 by-hand delta
+        case 6  : m.chi2.at(i) = GetChi2Opt(data,m.hist,fit_range); break; // Chi2Opt by-hand
+        case 7  : m.chi2.at(i) = GetChi2Opt(data,m.hist,fit_range); break; // Chi2Opt by-hand delta
         default : m.chi2.at(i) = GetChi2(data,m.hist,fit_range); teststat = 5; break; // Chi2 by-hand delta
       }
     }
@@ -398,7 +405,7 @@ int main(int argc, char* argv[]) {
     for (auto && m : models) v_chi2.at(m.ID) = m.chi2.at(i);
     // find minimum
     min_llh = std::min_element(std::begin(v_chi2),std::end(v_chi2));
-    // delta chi2
+    // delta teststat for odd IDs
     if (teststat%2 == 1) {
       std::transform(std::begin(v_chi2), std::end(v_chi2), std::begin(v_chi2), [c=*min_llh](double x) { return x -= c; } );
     }
@@ -527,4 +534,30 @@ double GetChi2(TH1D * h_data, TH1D * h_model, range_t range) {
   }
 
   return chi2;
+}
+
+double GetChi2Opt(TH1D * h_data, TH1D * h_model, range_t range) {
+
+  int bmin = h_data->FindBin(range.emin);
+  int bmax = h_data->FindBin(range.emax);
+
+  double int_data  = h_data->Integral(bmin,bmax);
+
+  // try different scalings +-1%
+  double chi2opt = -1.;
+
+  for (int i = -10; i < 11; i++) {
+    double chi2 = 0.;
+    double int_model = h_model->Integral(bmin,bmax);
+    h_model->Scale((1.+0.001*i)*int_data/int_model);
+
+    for (int b = bmin; b <= bmax; b++) {
+      double c_data  = h_data->GetBinContent(b);
+      double c_model = h_model->GetBinContent(b);
+      chi2 += (c_model - c_data) * (c_model - c_data) / c_model;
+    }
+    chi2opt = chi2opt < 0 ? chi2 : std::min(chi2,chi2opt);
+  }
+
+  return chi2opt;
 }
