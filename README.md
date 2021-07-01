@@ -1,6 +1,3 @@
-
-# DEPRECATED: This needs to be redone...
-
 # Ar39stat
 
 Toy Monte Carlo sampler of simulated <sup>39</sup>Ar GERDA spectra.
@@ -51,21 +48,6 @@ Note:
 - commmand line options can be given in arbitrary order
 - options given via a config.json file are overridden by all other command line options
 
-Default values:
-```
---json         : none
--c (--channel) : 0
---fccd         : 1000
---dlf          : 0.5
--s (--stat)    : 10000
---emin         : 45
---emax         : 150
--t (--toys)    : 100
--b             : 1
--v             : false
-```
-
-
 ## Dependencies
 
 The code depends on the `Root CERN` libraries to be compiled using the
@@ -86,7 +68,7 @@ and on the [progressbar](https://github.com/gipert/progressbar) utility by [gipe
 
 Interaction with `.json` files is done via [nlohmann/json](https://github.com/nlohmann/json). Consult the documentation for details.
 
-### Auxillary files
+## Auxillary files
 
 Download from mpik
 
