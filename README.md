@@ -3,7 +3,7 @@
 
 # Ar39stat
 
-Toy Monte Carlo sampler of simulated <sup>39</sup>Ar GERDA spectra. 
+Toy Monte Carlo sampler of simulated <sup>39</sup>Ar GERDA spectra.
 Different `FCCD` and `DLF` models and energy ranges can be specified
 in a `.json` config file to &chi;<sup>2</sup>-test against the toy experiments.
 All &chi;<sup>2</sup>-distributions are saved to file.
@@ -16,7 +16,7 @@ Download including submodules
 git clone --recurse-submodules git@github.com:vonsturm/ar39-fccd-dlf.git
 ```
 
-## Compilation 
+## Compilation
 
 A `Makefile` is present that saves the executables in `./bin`. Just invoke
 `make` and you are all set.
@@ -33,22 +33,22 @@ Chi2 test statistic sampling with Ar39 GERDA simulation
 USAGE : ./ar39-stat --json config.json <options>
 
 OPTIONS :
-    -h --help          : print this help text
-    --json <opt>       : master config file [conf.json]
-    -c --channel <opt> : channel [0-40]
-    --fccd <opt>       : fccd value in um [450-3000:50] must be available
-    --dlf <opt>        : dlf value as fraction [0.00-1.00:0.05] must be available
-    -s --stat <opt>    : statistics to be sampled in each toy experiment
-    --emin <opt>       : minimum energy for chi2 test [45-100]
-    --emax <opt>       : maximum energy for chi2 test [100-200]
-    -t --toys <opt>    : number of toy experiments
-    -b <opt>           : rebin
-    -v                 : more output
+	-h --help          : print this help text
+	--json <opt>       : master config file [conf.json]
+	--emin <opt>       : minimum energy for chi2 test [45-100]
+	--emax <opt>       : maximum energy for chi2 test [100-200]
+	-c --channel <opt> : channel
+	-r <opt>           : rebin
+	-o <opt>           : output directory
+	--test <opt>       : test statistics even number plain, odd number delta ts
+	                   : (0|1 = Chi2Test, 2|3 = KolmogorovTest, 4|5 = Chi2 by-hand, 6|7 optimized Chi2)
+	-i --interpolate   : use gerda-ar39-pdf to interpolate between discrete pdfs in fccd and dlf
+	-v                 : more output
 ```
 
 Note:
 - all options are optional, if not given the default value is used
-- commmand line options can be given in arbitrary order 
+- commmand line options can be given in arbitrary order
 - options given via a config.json file are overridden by all other command line options
 
 Default values:
@@ -92,7 +92,7 @@ Download from mpik
 
 Data
 ```
-cd ar39-fccd-dlf 
+cd ar39-fccd-dlf
 mkdir -p data
 cd data
 rsync -av mpik:/lfs/l3/gerda/pertoldi/gerda/gerda-fitter/data/*v07.00.root
@@ -100,6 +100,6 @@ rsync -av mpik:/lfs/l3/gerda/pertoldi/gerda/gerda-fitter/data/*v07.00.root
 
 MC files
 ```
-cd ar39-fccd-dlf 
+cd ar39-fccd-dlf
 rsync -avrz --copy-links --exclude edep --exclude prod-settings mpik:/lfs/l3/gerda/sturm/gerda/gerda-pdfs/releases/ph2p-ar39
 ```

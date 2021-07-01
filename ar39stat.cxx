@@ -37,7 +37,7 @@
 // progress
 #include "progressbar/progressbar.hpp"
 
-// gedra-ar39-pdf
+// gerda-ar39-pdf
 #include "gerda-ar39-pdf/include/gerda_ar39_pdf.hpp"
 
 //own
@@ -76,7 +76,8 @@ void usage() {
   std::cout << "\t-c --channel <opt> : channel\n";
   std::cout << "\t-r <opt>           : rebin\n";
   std::cout << "\t-o <opt>           : output directory\n";
-  std::cout << "\t--test <opt>       : test statistics (0,1 = Chi2Test, 2,3 = KolmogorovTest, 4,5 = Chi2 calculated by-hand)\n";
+  std::cout << "\t--test <opt>       : test statistics even number plain, odd number delta ts\n";
+  std::cout << "\t                   : (0|1 = Chi2Test, 2|3 = KolmogorovTest, 4|5 = Chi2 by-hand, 6|7 optimized Chi2)\n";
   std::cout << "\t-i --interpolate   : use gerda-ar39-pdf to interpolate between discrete pdfs in fccd and dlf\n";
   std::cout << "\t-v                 : more output\n\n";
 }
@@ -156,7 +157,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (j_conf.contains("fit-range")) {
-    fit_range = range_t( 
+    fit_range = range_t(
       0,
       j_conf["fit-range"].value("emin",45),
       j_conf["fit-range"].value("emax",160)
@@ -167,12 +168,12 @@ int main(int argc, char* argv[]) {
   double dlf_start = 0., dlf_stop = 1., dlf_step = 0.1;
   if (j_conf.contains("models")) {
     int ID = 0;
-    fccd_start = j_conf["models"]["fccd"].value("start", 650); 
-    fccd_stop  = j_conf["models"]["fccd"].value("stop", 2400); 
-    fccd_step  = j_conf["models"]["fccd"].value("step",  100); 
-    dlf_start  = j_conf["models"]["dlf"] .value("start", 0.); 
-    dlf_stop   = j_conf["models"]["dlf"] .value("stop",  1.); 
-    dlf_step   = j_conf["models"]["dlf"] .value("step", 0.1); 
+    fccd_start = j_conf["models"]["fccd"].value("start", 650);
+    fccd_stop  = j_conf["models"]["fccd"].value("stop", 2400);
+    fccd_step  = j_conf["models"]["fccd"].value("step",  100);
+    dlf_start  = j_conf["models"]["dlf"] .value("start", 0.);
+    dlf_stop   = j_conf["models"]["dlf"] .value("stop",  1.);
+    dlf_step   = j_conf["models"]["dlf"] .value("step", 0.1);
     for (int f = fccd_start; f <= fccd_stop; f += fccd_step ) {
       for (double d = dlf_start; d <= dlf_stop; d += dlf_step ) {
         models.emplace_back(ID++, f, d, std::vector<double>()); // chi
@@ -181,7 +182,7 @@ int main(int argc, char* argv[]) {
   }
 
   args_reader::fetch_arg(args, "--test", teststat);
-  
+
   args_reader::fetch_arg(args, "-i", interpolate);
   args_reader::fetch_arg(args, "--interpolate", interpolate);
 
@@ -211,7 +212,7 @@ int main(int argc, char* argv[]) {
     std::cout << "channel: " << channel << "\n";
     std::cout << "rebin: " << rebin << "\n";
     std::cout << "range: " << fit_range.emin << " - " << fit_range.emax  << " keV\n";
-    std::cout << "test statistics: "; 
+    std::cout << "test statistics: ";
     switch (teststat) {
       case 0  : std::cout << "Chi2Test\n";             break;
       case 1  : std::cout << "delta Chi2Test\n";       break;
@@ -224,7 +225,7 @@ int main(int argc, char* argv[]) {
       default : std::cout << "Test statistics not implemented using default: delta Chi2\n"; break;
     }
     if (!interpolate)  std::cout << "DO NOT ";
-    std::cout << "USE gerda-ar39-pdf to interpolate between discrete pdfs\n"; 
+    std::cout << "USE gerda-ar39-pdf to interpolate between discrete pdfs\n";
   }
 
   // -------------------------------------------------------------------
@@ -263,12 +264,16 @@ int main(int argc, char* argv[]) {
   }
   fin.Close();
 
-  // load model histograms 
+  // load model histograms
   for (auto && m : models) {
     std::string mname = Form("model_fccd%d_dlf%03d",m.fccd,(int)round(m.dlf*100));
     std::string mtitle = mname + Form(";energy[keV];cts / %.1fkeV",v_data[0]->GetBinWidth(1)*rebin);
     if (!interpolate) {
       TFile fm(get_filename(m).c_str());
+      if (!fm.IsOpen()) {
+        m.hist = nullptr;
+        continue;
+      }
       m.hist = dynamic_cast<TH1D*>( fm.Get(Form("raw/M1_ch%i", channel)) );
       m.hist->SetName(mname.c_str());
       m.hist->SetTitle(mtitle.c_str());
@@ -302,7 +307,7 @@ int main(int argc, char* argv[]) {
     TCanvas * cm_dlf  = new TCanvas("cm_dlf","cm_dlf",1000,700);
     int i = 0, j = 0;
     for (auto && m : models) {
-      if (round(m.dlf*100) == 60) { 
+      if (round(m.dlf*100) == 60) {
         cm_fccd->cd();
         m.hist->SetLineColor( i%2==0 ? kRed : kBlue );
         m.hist->DrawCopy(i == 0 ? "hist" : "hist same");
@@ -342,7 +347,7 @@ int main(int argc, char* argv[]) {
     for (auto && m : models) {
 
       if (!toys) bar.update();
-
+      if (m.hist == nullptr) continue;
       // check binning
       double bw_m = m.hist->GetBinWidth(1);
       int nxbins_m = m.hist->GetNbinsX();
@@ -392,17 +397,21 @@ int main(int argc, char* argv[]) {
   TFile of((outdir+"/"+prefix+get_ofilename(toys,interpolate,channel,rebin,fit_range)).c_str(),"RECREATE");
   TTree tree("statTree", "statTree");
   std::vector<double> v_chi2(models.size());
-  int best_fccd = 0; double best_dlf = 0;
+  int best_fccd = 0; double best_dlf = 0, gof = -1;
   for (auto && m : models)
     tree.Branch(Form("chi2_%i_%03d",m.fccd,(int)(round(m.dlf*100))), &v_chi2.at(m.ID));
   tree.Branch("best_fccd", &best_fccd);
-  tree.Branch("best_dlf",  &best_dlf);
+  tree.Branch("best_dlf",  &best_dlf );
+  tree.Branch("gof",       &gof      );
 
   auto min_llh = std::begin(v_chi2);
 
   for (size_t i=0; i<v_data.size(); i++) {
     // fill model vector
-    for (auto && m : models) v_chi2.at(m.ID) = m.chi2.at(i);
+    for (auto && m : models) {
+      if (m.hist != nullptr) v_chi2.at(m.ID) = m.chi2.at(i);
+      else                   v_chi2.at(m.ID) = 1e4;
+    }
     // find minimum
     min_llh = std::min_element(std::begin(v_chi2),std::end(v_chi2));
     // delta teststat for odd IDs
@@ -412,6 +421,7 @@ int main(int argc, char* argv[]) {
     // minimum corrisponds to best fit
     best_fccd = models.at(min_llh-std::begin(v_chi2)).fccd;
     best_dlf  = models.at(min_llh-std::begin(v_chi2)).dlf;
+    gof = v_data.at(i)->Chi2Test(models.at(min_llh-std::begin(v_chi2)).hist, "UW CHI2/NDF");
     tree.Fill();
   }
 
@@ -455,9 +465,11 @@ int main(int argc, char* argv[]) {
     c2->Write("best_fit_fccd");
 
     TParameter<int>    p_best_fccd("best_fccd", best_fccd);
-    TParameter<double> p_best_dlf ("best_dlf",  best_dlf);
+    TParameter<double> p_best_dlf ("best_dlf",  best_dlf );
+    TParameter<double> p_gof      ("gof",       gof      );
     p_best_fccd.Write();
     p_best_dlf.Write();
+    p_gof.Write();
 
     // Canvas with TS profile
     TH2D * ts_profile = new TH2D("ts_profile","ts_profile",
@@ -484,8 +496,8 @@ std::string get_filename(int fccd, double dlf) {
   std::string name = "ph2p-ar39/nplus-fccd";
   name += std::to_string(fccd);
   name += "um-dlf";
-  name += Form("%03d", (int)(round(dlf*100))); 
-  name += "/lar/sur_array_1/Ar39/pdf-lar-sur_array_1-Ar39.root";
+  name += Form("%03d", (int)(round(dlf*100)));
+  name += "/lar/sur_array_4/Ar39/pdf-lar-sur_array_4-Ar39.root";
 
   return name;
 }
