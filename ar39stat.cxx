@@ -77,7 +77,7 @@ void usage() {
   std::cout << "\t-r <opt>           : rebin\n";
   std::cout << "\t-o <opt>           : output directory\n";
   std::cout << "\t--test <opt>       : test statistics even number plain, odd number delta ts\n";
-  std::cout << "\t                   : (0|1 = Chi2Test, 2|3 = KolmogorovTest, 4|5 = Chi2 by-hand, 6|7 Chi2/NDF)\n";
+  std::cout << "\t                   : (0|1 = Chi2Test, 2|3 = Chi2Test/NDF, 4|5 = Kolmogorov, 6/7 Chi2 by-hand)\n";
   std::cout << "\t-i --interpolate   : use gerda-ar39-pdf to interpolate between discrete pdfs in fccd and dlf\n";
   std::cout << "\t-v                 : more output\n\n";
 }

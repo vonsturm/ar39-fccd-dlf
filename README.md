@@ -38,7 +38,7 @@ OPTIONS :
 	-r <opt>           : rebin
 	-o <opt>           : output directory
 	--test <opt>       : test statistics even number plain, odd number delta ts
-	                   : (0|1 = Chi2Test, 2|3 = KolmogorovTest, 4|5 = Chi2 by-hand, 6|7 optimized Chi2)
+	                   : (0|1 = Chi2Test, 2|3 = Chi2Test/NDF, 4|5 = Kolmogorov, 6/7 Chi2 by-hand)
 	-i --interpolate   : use gerda-ar39-pdf to interpolate between discrete pdfs in fccd and dlf
 	-v                 : more output
 ```
