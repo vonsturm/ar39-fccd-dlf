@@ -77,7 +77,7 @@ void usage() {
   std::cout << "\t-r <opt>           : rebin\n";
   std::cout << "\t-o <opt>           : output directory\n";
   std::cout << "\t--test <opt>       : test statistics even number plain, odd number delta ts\n";
-  std::cout << "\t                   : (0|1 = Chi2Test, 2|3 = KolmogorovTest, 4|5 = Chi2 by-hand, 6|7 optimized Chi2)\n";
+  std::cout << "\t                   : (0|1 = Chi2Test, 2|3 = KolmogorovTest, 4|5 = Chi2 by-hand, 6|7 Chi2/NDF)\n";
   std::cout << "\t-i --interpolate   : use gerda-ar39-pdf to interpolate between discrete pdfs in fccd and dlf\n";
   std::cout << "\t-v                 : more output\n\n";
 }
@@ -108,7 +108,7 @@ int main(int argc, char* argv[]) {
   uint16_t channel = 0;
 
   uint16_t rebin = 1;
-  uint16_t teststat = 5;
+  uint16_t teststat = 1;
   bool interpolate = false;
   range_t fit_range(10000, 45, 160);
 
@@ -216,13 +216,14 @@ int main(int argc, char* argv[]) {
     switch (teststat) {
       case 0  : std::cout << "Chi2Test\n";             break;
       case 1  : std::cout << "delta Chi2Test\n";       break;
-      case 2  : std::cout << "KolmogorovTest\n";       break;
-      case 3  : std::cout << "delta KolmogorovTest\n"; break;
-      case 4  : std::cout << "Chi2\n";                 break;
-      case 5  : std::cout << "delta Chi2\n";           break;
-      case 6  : std::cout << "Chi2 norm. opt.\n";      break;
-      case 7  : std::cout << "delta Chi2 norm. opt.\n";break;
-      default : std::cout << "Test statistics not implemented using default: delta Chi2\n"; break;
+      case 2  : std::cout << "Chi2Test/NDF\n";         break;
+      case 3  : std::cout << "delta Chi2Test/NDF\n";   break;
+      case 4  : std::cout << "KolmogorovTest\n";       break;
+      case 5  : std::cout << "delta KolmogorovTest\n"; break;
+      case 6  : std::cout << "Chi2 by-hand\n";         break;
+      case 7  : std::cout << "delta Chi2 by-hand\n";   break;
+      default : std::cout << "Test statistics not implemented using default (1): delta Chi2Test\n";
+                break;
     }
     if (!interpolate)  std::cout << "DO NOT ";
     std::cout << "USE gerda-ar39-pdf to interpolate between discrete pdfs\n";
@@ -249,7 +250,7 @@ int main(int argc, char* argv[]) {
       auto key = (TKey*) keyAsObj;
       if (std::string(key->GetClassName()) == "TH1D") {
         v_data[hct] = dynamic_cast<TH1D*>( fin.Get(key->GetName()) );
-        if (teststat < 4) { // make sure histogram is unweighted
+        if (teststat < 6) { // make sure histogram is unweighted
           for (int b = 1; b <= v_data[hct]->GetNbinsX(); b++) {
             double cont = v_data[hct]->GetBinContent(b);
             v_data[hct]->SetBinContent(b,0);
@@ -294,7 +295,7 @@ int main(int argc, char* argv[]) {
         }
         m.hist->SetBinError(b,0.);
       }
-      if (teststat < 4) m.hist->Scale(4.e10);
+      if (teststat < 6) m.hist->Scale(4.e10);
     }
     m.hist->Rebin(rebin);
     m.chi2.resize(v_data.size());
@@ -366,7 +367,7 @@ int main(int argc, char* argv[]) {
       m.hist->GetXaxis()->SetRangeUser(fit_range.emin,fit_range.emax);
       data  ->GetXaxis()->SetRangeUser(fit_range.emin,fit_range.emax);
 
-      if (teststat < 4) {
+      if (teststat < 6) {
         if (data->Integral(data->FindBin(fit_range.emin),data->FindBin(fit_range.emax)) < 10) {
           std::cout << "\nEmpty Hist: " << data->GetName() << " " << data->Integral() << std::endl;
           exit(EXIT_FAILURE);
@@ -378,15 +379,15 @@ int main(int argc, char* argv[]) {
       }
 
       switch (teststat) {
-        case 0  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2"); break; // Chi2
-        case 1  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2"); break; // Chi2 delta
-        case 2  : m.chi2.at(i) = data->KolmogorovTest(m.hist);      break; // KolmogorovTest
-        case 3  : m.chi2.at(i) = data->KolmogorovTest(m.hist);      break; // KolmogorovTest delta
-        case 4  : m.chi2.at(i) = GetChi2(data,m.hist,fit_range); break; // Chi2 by-hand
-        case 5  : m.chi2.at(i) = GetChi2(data,m.hist,fit_range); break; // Chi2 by-hand delta
-        case 6  : m.chi2.at(i) = GetChi2Opt(data,m.hist,fit_range); break; // Chi2Opt by-hand
-        case 7  : m.chi2.at(i) = GetChi2Opt(data,m.hist,fit_range); break; // Chi2Opt by-hand delta
-        default : m.chi2.at(i) = GetChi2(data,m.hist,fit_range); teststat = 5; break; // Chi2 by-hand delta
+        case 0  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2");     break; // Chi2Test
+        case 1  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2");     break; // Chi2Test delta
+        case 2  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2/NDF"); break; // Chi2Test/NDF
+        case 3  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2/NDF"); break; // Chi2Test/NDF delta
+        case 4  : m.chi2.at(i) = data->KolmogorovTest(m.hist);          break; // KolmogorovTest
+        case 5  : m.chi2.at(i) = data->KolmogorovTest(m.hist);          break; // KolmogorovTest delta
+        case 6  : m.chi2.at(i) = GetChi2(data,m.hist,fit_range);        break; // Chi2 by-hand
+        case 7  : m.chi2.at(i) = GetChi2(data,m.hist,fit_range);        break; // Chi2 by-hand delta
+        default : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2"); teststat = 1; break; // Chi2Test delta
       }
     }
     i++;
