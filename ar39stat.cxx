@@ -496,7 +496,7 @@ std::string get_filename(int fccd, double dlf) {
   std::string name = "ph2p-ar39/nplus-fccd";
   name += std::to_string(fccd);
   name += "um-dlf";
-  name += Form("%03d", (int)(round(dlf*100)));
+  name += Form("%04d", (int)(round(dlf*100)));
   name += "/lar/sur_array_4/Ar39/pdf-lar-sur_array_4-Ar39.root";
 
   return name;
