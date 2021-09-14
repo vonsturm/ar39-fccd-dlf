@@ -19,6 +19,7 @@
 #include <execution> // for parallel policies
 #include <algorithm>
 #include <type_traits>
+#include <limits>
 
 // root cern
 #include "TH1D.h"
@@ -411,7 +412,7 @@ int main(int argc, char* argv[]) {
     // fill model vector
     for (auto && m : models) {
       if (m.hist != nullptr) v_chi2.at(m.ID) = m.chi2.at(i);
-      else                   v_chi2.at(m.ID) = 1e4;
+      else                   v_chi2.at(m.ID) = std::numeric_limits<double>::max();
     }
     // find minimum
     min_llh = std::min_element(std::begin(v_chi2),std::end(v_chi2));
@@ -422,7 +423,8 @@ int main(int argc, char* argv[]) {
     // minimum corrisponds to best fit
     best_fccd = models.at(min_llh-std::begin(v_chi2)).fccd;
     best_dlf  = models.at(min_llh-std::begin(v_chi2)).dlf;
-    gof = v_data.at(i)->Chi2Test(models.at(min_llh-std::begin(v_chi2)).hist, "UW CHI2/NDF");
+    //gof = v_data.at(i)->Chi2Test(models.at(min_llh-std::begin(v_chi2)).hist, "UW CHI2/NDF");
+    gof = v_data.at(i)->Chi2Test(models.at(min_llh-std::begin(v_chi2)).hist, "UW");
     tree.Fill();
   }
 
@@ -486,9 +488,11 @@ int main(int argc, char* argv[]) {
     ofh.Close();
   }
 
+std::cout << "test" << std::endl;
   // model and data histograms are not needed anymore at this point
   for (auto && m : models) { delete m.hist; m.hist = nullptr; }
   for (auto && d : v_data) { delete d; d = nullptr; }
+  std::cout << "test" << std::endl;
 
   return 0;
 }
