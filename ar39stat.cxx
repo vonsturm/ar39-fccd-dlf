@@ -75,7 +75,7 @@ void usage() {
   std::cout << "\t--emin <opt>       : minimum energy for chi2 test [45-100]\n";
   std::cout << "\t--emax <opt>       : maximum energy for chi2 test [100-200]\n";
   std::cout << "\t-c --channel <opt> : channel\n";
-  std::cout << "\t--activity <opt>   : scale to activity <opt>Bq/l\n";
+  std::cout << "\t--activity <opt>   : scale to activity <opt>Bq/kg\n";
   std::cout << "\t-r <opt>           : rebin\n";
   std::cout << "\t-o <opt>           : output directory\n";
   std::cout << "\t--test <opt>       : test statistics even number plain, odd number delta ts\n";
@@ -89,7 +89,7 @@ std::string get_filename(int fccd, double dlf);
 std::string get_ofilename(bool toys, bool interpolate, int channel, int rebin, range_t r);
 std::string get_treename(int channel, range_t r);
 void scale_TH1D_to_integral(TH1D * h, range_t range);
-double GetChi2(TH1D * h_data, TH1D * h_model, range_t range);
+double GetChi2(TH1D * h_data, TH1D * h_model, range_t range, bool use_fixed_activity=false, double activity=1.);
 double GetChi2Opt(TH1D * h_data, TH1D * h_model, range_t range);
 
 int main(int argc, char* argv[]) {
@@ -385,14 +385,15 @@ int main(int argc, char* argv[]) {
       }
 
       switch (teststat) {
-        case 0  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2");     break; // Chi2Test
+        case 0  :                                                              // Chi2Test
         case 1  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2");     break; // Chi2Test delta
-        case 2  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2/NDF"); break; // Chi2Test/NDF
+        case 2  :                                                              // Chi2Test/NDF
         case 3  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2/NDF"); break; // Chi2Test/NDF delta
-        case 4  : m.chi2.at(i) = data->KolmogorovTest(m.hist);          break; // KolmogorovTest
+        case 4  :                                                              // KolmogorovTest
         case 5  : m.chi2.at(i) = data->KolmogorovTest(m.hist);          break; // KolmogorovTest delta
-        case 6  : m.chi2.at(i) = GetChi2(data,m.hist,fit_range);        break; // Chi2 by-hand
-        case 7  : m.chi2.at(i) = GetChi2(data,m.hist,fit_range);        break; // Chi2 by-hand delta
+        case 6  :                                                              // Chi2 by-hand
+        case 7  : m.chi2.at(i) = GetChi2(data,m.hist,fit_range,use_fixed_activity,activity);
+                                                                        break; // Chi2 by-hand delta
         default : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2"); teststat = 1; break; // Chi2Test delta
       }
     }
@@ -545,7 +546,7 @@ void scale_TH1D_to_integral(TH1D * h, range_t range) {
   h->Scale(1./h->Integral(h->FindBin(range.emin), h->FindBin(range.emax)));
 }
 
-double GetChi2(TH1D * h_data, TH1D * h_model, range_t range) {
+double GetChi2(TH1D * h_data, TH1D * h_model, range_t range, bool use_fixed_activity, double activity) {
 
   int bmin = h_data->FindBin(range.emin);
   int bmax = h_data->FindBin(range.emax);
@@ -554,7 +555,8 @@ double GetChi2(TH1D * h_data, TH1D * h_model, range_t range) {
   double int_model = h_model->Integral(bmin,bmax);
 
   // do not actually scale but use a correction factor
-  double cf = int_data/int_model;
+  double sim_act = 1.e12 / (37032.160 * 188400 * 1.39);
+  double cf = use_fixed_activity ? activity/sim_act : int_data/int_model;
 
   double chi2 = 0.;
 
