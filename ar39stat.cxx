@@ -75,6 +75,7 @@ void usage() {
   std::cout << "\t--emin <opt>       : minimum energy for chi2 test [45-100]\n";
   std::cout << "\t--emax <opt>       : maximum energy for chi2 test [100-200]\n";
   std::cout << "\t-c --channel <opt> : channel\n";
+  std::cout << "\t--activity <opt>   : scale to activity <opt>Bq/l\n";
   std::cout << "\t-r <opt>           : rebin\n";
   std::cout << "\t-o <opt>           : output directory\n";
   std::cout << "\t--test <opt>       : test statistics even number plain, odd number delta ts\n";
@@ -108,6 +109,7 @@ int main(int argc, char* argv[]) {
   std::string prefix = "";
   uint16_t channel = 0;
 
+  double activity = 1; // in Bq/kg
   uint16_t rebin = 1;
   uint16_t teststat = 1;
   bool interpolate = false;
@@ -192,8 +194,10 @@ int main(int argc, char* argv[]) {
   args_reader::fetch_arg(args, "-c",     channel);
   args_reader::fetch_arg(args, "--channel",     channel);
 
-  args_reader::fetch_arg(args, "-r", rebin  );
-  args_reader::fetch_arg(args, "-o", outdir );
+  bool use_fixed_activity =
+    args_reader::fetch_arg(args, "--activity", activity);
+  args_reader::fetch_arg(args, "-r", rebin );
+  args_reader::fetch_arg(args, "-o", outdir);
 
   // -------------------------------------------------------------------
   // check input parameters
@@ -211,6 +215,7 @@ int main(int argc, char* argv[]) {
     if (toys) std::cout << "Processing: gerda-factory toy MCs - " << infile << std::endl;
     else      std::cout << "Processing: Real Data - " << infile << std::endl;
     std::cout << "channel: " << channel << "\n";
+    if (use_fixed_activity) std::cout << "fixed activity: " << activity << "\n";
     std::cout << "rebin: " << rebin << "\n";
     std::cout << "range: " << fit_range.emin << " - " << fit_range.emax  << " keV\n";
     std::cout << "test statistics: ";
@@ -399,12 +404,13 @@ int main(int argc, char* argv[]) {
   TFile of((outdir+"/"+prefix+get_ofilename(toys,interpolate,channel,rebin,fit_range)).c_str(),"RECREATE");
   TTree tree("statTree", "statTree");
   std::vector<double> v_chi2(models.size());
-  int best_fccd = 0; double best_dlf = 0, gof = -1;
+  int best_fccd = 0; double best_dlf = 0., best_activity = 0., gof = -1.;
   for (auto && m : models)
     tree.Branch(Form("chi2_%i_%03d",m.fccd,(int)(round(m.dlf*100))), &v_chi2.at(m.ID));
-  tree.Branch("best_fccd", &best_fccd);
-  tree.Branch("best_dlf",  &best_dlf );
-  tree.Branch("gof",       &gof      );
+  tree.Branch("best_fccd",     &best_fccd     );
+  tree.Branch("best_dlf",      &best_dlf      );
+  tree.Branch("best_activity", &best_activity );
+  tree.Branch("gof",           &gof           );
 
   auto min_llh = std::begin(v_chi2);
 
@@ -421,10 +427,17 @@ int main(int argc, char* argv[]) {
       std::transform(std::begin(v_chi2), std::end(v_chi2), std::begin(v_chi2), [c=*min_llh](double x) { return x -= c; } );
     }
     // minimum corrisponds to best fit
-    best_fccd = models.at(min_llh-std::begin(v_chi2)).fccd;
-    best_dlf  = models.at(min_llh-std::begin(v_chi2)).dlf;
-    //gof = v_data.at(i)->Chi2Test(models.at(min_llh-std::begin(v_chi2)).hist, "UW CHI2/NDF");
-    gof = v_data.at(i)->Chi2Test(models.at(min_llh-std::begin(v_chi2)).hist, "UW");
+    auto best_model = models.at(min_llh-std::begin(v_chi2));
+    best_fccd = best_model.fccd;
+    best_dlf  = best_model.dlf;
+    // calculate activity for best fit model
+    // primaries / (LT[s] * Volume[cm3] * Density[g/cm3] / 1000[g/kg])
+    double sim_act = 1.e12 / (37032.160 * 188400 * 1.39);
+    double model_int = best_model.hist->Integral(fit_range.emin, fit_range.emax);
+    double data_int  = v_data.at(i)   ->Integral(fit_range.emin, fit_range.emax);
+    best_activity = sim_act * data_int/model_int;
+    //gof = v_data.at(i)->Chi2Test(best_model.hist, "UW CHI2/NDF");
+    gof = v_data.at(i)->Chi2Test(best_model.hist, "UW");
     tree.Fill();
   }
 
@@ -540,13 +553,14 @@ double GetChi2(TH1D * h_data, TH1D * h_model, range_t range) {
   double int_data  = h_data->Integral(bmin,bmax);
   double int_model = h_model->Integral(bmin,bmax);
 
-  h_model->Scale(int_data/int_model);
+  // do not actually scale but use a correction factor
+  double cf = int_data/int_model;
 
   double chi2 = 0.;
 
   for (int b = bmin; b <= bmax; b++) {
     double c_data  = h_data->GetBinContent(b);
-    double c_model = h_model->GetBinContent(b);
+    double c_model = cf * h_model->GetBinContent(b);
     chi2 += (c_model - c_data) * (c_model - c_data) / c_model;
   }
 
