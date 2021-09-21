@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <type_traits>
 #include <limits>
+#include <cmath>
 
 // root cern
 #include "TH1D.h"
@@ -62,6 +63,7 @@ struct dlm_t {
 // energy range
 struct range_t {
   int ID; double emin; double emax;
+  range_t() : ID(0), emin(0.), emax(0.) {}
   range_t(int ID, double emin, double emax)
     : ID(ID), emin(emin), emax(emax) {}
 };
@@ -89,8 +91,16 @@ std::string get_filename(int fccd, double dlf);
 std::string get_ofilename(bool toys, bool interpolate, int channel, int rebin, range_t r);
 std::string get_treename(int channel, range_t r);
 void scale_TH1D_to_integral(TH1D * h, range_t range);
+//
 double GetChi2(TH1D * h_data, TH1D * h_model, range_t range, bool use_fixed_activity=false, double activity=1.);
 double GetChi2Opt(TH1D * h_data, TH1D * h_model, range_t range);
+double CalcIncompleteGamma(double s, double z);
+double Chi2pValue(int degrees_of_freedom, double critical_value);
+//
+double CalcTeststatistic(uint16_t teststat, TH1D * h_data, TH1D * h_model,
+                         range_t fit_range=range_t(), bool use_fixed_activity=false, double activity=1.);
+double CalcPValue(uint16_t teststat, TH1D * h_data, TH1D * h_model,
+                  range_t fit_range=range_t(), bool use_fixed_activity=false, double activity=1.);
 
 int main(int argc, char* argv[]) {
 
@@ -384,18 +394,7 @@ int main(int argc, char* argv[]) {
         }
       }
 
-      switch (teststat) {
-        case 0  :                                                              // Chi2Test
-        case 1  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2");     break; // Chi2Test delta
-        case 2  :                                                              // Chi2Test/NDF
-        case 3  : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2/NDF"); break; // Chi2Test/NDF delta
-        case 4  :                                                              // KolmogorovTest
-        case 5  : m.chi2.at(i) = data->KolmogorovTest(m.hist);          break; // KolmogorovTest delta
-        case 6  :                                                              // Chi2 by-hand
-        case 7  : m.chi2.at(i) = GetChi2(data,m.hist,fit_range,use_fixed_activity,activity);
-                                                                        break; // Chi2 by-hand delta
-        default : m.chi2.at(i) = data->Chi2Test(m.hist, "UW CHI2"); teststat = 1; break; // Chi2Test delta
-      }
+      m.chi2.at(i) = CalcTeststatistic(teststat,data,m.hist,fit_range,use_fixed_activity,activity);
     }
     i++;
   }
@@ -438,7 +437,8 @@ int main(int argc, char* argv[]) {
     double data_int  = v_data.at(i)   ->Integral(fit_range.emin, fit_range.emax);
     best_activity = sim_act * data_int/model_int;
     //gof = v_data.at(i)->Chi2Test(best_model.hist, "UW CHI2/NDF");
-    gof = v_data.at(i)->Chi2Test(best_model.hist, "UW");
+    //gof = v_data.at(i)->Chi2Test(best_model.hist, "UW");
+    gof = CalcPValue(teststat,v_data.at(i),best_model.hist,fit_range,use_fixed_activity,activity);
     tree.Fill();
   }
 
@@ -593,4 +593,82 @@ double GetChi2Opt(TH1D * h_data, TH1D * h_model, range_t range) {
   }
 
   return chi2opt;
+}
+
+
+double CalcIncompleteGamma(double s, double z) {
+
+  if (z < 0.) return 0.;
+
+  double sc = (1./s) * pow(z,s) * exp(-z);
+  double sum = 1., nom = 1., denom = 1.;
+
+  for (int i = 0; i < 200; i++) {
+    nom   *= z;
+    denom *= ++s;
+    sum   += (nom/denom);
+  }
+
+  return sum * sc;
+}
+
+double Chi2pValue(int degrees_of_freedom, double critical_value) {
+
+  if (critical_value < 0 || degrees_of_freedom < 1)
+    return 0.;
+  if (degrees_of_freedom == 2)
+    return exp(critical_value * 0.5);
+
+  double PValue = CalcIncompleteGamma(degrees_of_freedom * 0.5, critical_value * 0.5);
+
+  if (isnan(PValue) || isinf(PValue) || PValue <= 1e-8)
+    return 1e-14;
+
+  PValue /= tgamma(degrees_of_freedom * 0.5);
+
+  return (1. - PValue);
+}
+
+double CalcTeststatistic(uint16_t teststat, TH1D * h_data, TH1D * h_model,
+                         range_t fit_range, bool use_fixed_activity, double activity)
+{
+  double ts = DBL_MAX;
+
+  switch (teststat) {
+    case 2  :                                                       // Chi2Test/NDF
+    case 3  : ts = h_data->Chi2Test(h_model,"UW CHI2/NDF"); break; // Chi2Test/NDF delta
+    case 4  :                                                       // KolmogorovTest
+    case 5  : ts = h_data->KolmogorovTest(h_model);          break; // KolmogorovTest delta
+    case 6  :                                                       // Chi2 by-hand
+    case 7  : ts = GetChi2(h_data,h_model,fit_range,use_fixed_activity,activity);
+                                                             break; // Chi2 by-hand delta
+    case 0  :                                                       // Chi2Test
+    case 1  :                                                       // Chi2Test delta
+    default : ts = h_data->Chi2Test(h_model,"UW CHI2");     break; // Chi2Test delta
+  }
+
+  return ts;
+}
+
+double CalcPValue(uint16_t teststat, TH1D * h_data, TH1D * h_model,
+                  range_t fit_range, bool use_fixed_activity, double activity)
+{
+  double pValue = DBL_MAX;
+
+  switch (teststat) {
+    case 2  :                                                      // Chi2Test/NDF
+    case 3  : pValue = h_data->Chi2Test(h_model,"UW");     break; // Chi2Test/NDF delta
+    case 4  :                                                      // KolmogorovTest
+    case 5  : pValue = h_data->KolmogorovTest(h_model,"X"); break; // KolmogorovTest delta
+    case 6  :                                                      // Chi2 by-hand
+//    case 7  : Chi2pValue(h_data->FindBin(fit_range.emax) - h_data->FindBin(fit_range.emin) - 1,
+//                         GetChi2(h_data,h_model,fit_range,use_fixed_activity,activity));
+    case 7  : pValue = GetChi2(h_data,h_model,fit_range,use_fixed_activity,activity);
+                                                            break; // Chi2 by-hand delta
+    case 0  :                                                      // Chi2Test
+    case 1  :                                                      // Chi2Test delta
+    default : pValue = h_data->Chi2Test(h_model,"UW");     break; // Chi2Test delta
+  }
+
+  return pValue;
 }
