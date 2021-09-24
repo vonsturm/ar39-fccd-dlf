@@ -630,8 +630,7 @@ double CalcPValue(uint16_t teststat, TH1D * h_data, TH1D * h_model,
     case 7  : pValue =
                 TMath::Prob(
                   GetChi2(h_data,h_model,fit_range,use_fixed_activity,activity),
-                  h_data->FindBin(fit_range.emax) - h_data->FindBin(fit_range.emin) - 1
-                );
+                  h_data->FindBin(fit_range.emax) - h_data->FindBin(fit_range.emin) - 2);
                                                             break; // Chi2 by-hand delta
     case 0  :                                                      // Chi2Test
     case 1  :                                                      // Chi2Test delta
