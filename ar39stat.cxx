@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
 
   double activity = 1; // in Bq/kg
   uint16_t rebin = 1;
-  uint16_t teststat = 1;
+  uint16_t teststat = 7;
   bool interpolate = false;
   range_t fit_range(10000, 45, 160);
 
@@ -235,7 +235,7 @@ int main(int argc, char* argv[]) {
       case 5  : std::cout << "delta KolmogorovTest\n"; break;
       case 6  : std::cout << "Chi2 by-hand\n";         break;
       case 7  : std::cout << "delta Chi2 by-hand\n";   break;
-      default : std::cout << "Test statistics not implemented using default (1): delta Chi2Test\n";
+      default : std::cout << "Test statistics not implemented using default (7): delta Chi2 by-handt\n";
                 break;
     }
     if (!interpolate)  std::cout << "DO NOT ";
@@ -598,16 +598,15 @@ double CalcTeststatistic(uint16_t teststat, TH1D * h_data, TH1D * h_model,
   double ts = DBL_MAX;
 
   switch (teststat) {
+    case 0  :                                                      // Chi2Test
+    case 1  : ts = h_data->Chi2Test(h_model,"UW CHI2");     break; // Chi2Test delta
     case 2  :                                                      // Chi2Test/NDF
     case 3  : ts = h_data->Chi2Test(h_model,"UW CHI2/NDF"); break; // Chi2Test/NDF delta
     case 4  :                                                      // KolmogorovTest
     case 5  : ts = h_data->KolmogorovTest(h_model);         break; // KolmogorovTest delta
     case 6  :                                                      // Chi2 by-hand
-    case 7  : ts = GetChi2(h_data,h_model,fit_range,use_fixed_activity,activity);
-                                                            break; // Chi2 by-hand delta
-    case 0  :                                                      // Chi2Test
-    case 1  :                                                      // Chi2Test delta
-    default : ts = h_data->Chi2Test(h_model,"UW CHI2");     break; // Chi2Test delta
+    case 7  :                                                      // Chi2 by-hand delta
+    default : ts = GetChi2(h_data,h_model,fit_range,use_fixed_activity,activity); break; // default 7
   }
 
   return ts;
@@ -619,20 +618,19 @@ double CalcPValue(uint16_t teststat, TH1D * h_data, TH1D * h_model,
   double pValue = DBL_MAX;
 
   switch (teststat) {
+    case 0  :                                                      // Chi2Test
+    case 1  : pValue = h_data->Chi2Test(h_model,"UW");      break; // Chi2Test delta
     case 2  :                                                      // Chi2Test/NDF
     case 3  : pValue = h_data->Chi2Test(h_model,"UW");      break; // Chi2Test/NDF delta
     case 4  :                                                      // KolmogorovTest
     case 5  : pValue = h_data->KolmogorovTest(h_model,"X"); break; // KolmogorovTest delta
     case 6  :                                                      // Chi2 by-hand
-    case 7  : pValue =
+    case 7  :                                                      // Chi2 by-hand delta
+    default : pValue =
                 TMath::Prob(
                   GetChi2(h_data,h_model,fit_range,use_fixed_activity,activity),
-                  h_data->FindBin(fit_range.emax) - h_data->FindBin(fit_range.emin) - 1
-                );
-                                                            break; // Chi2 by-hand delta
-    case 0  :                                                      // Chi2Test
-    case 1  :                                                      // Chi2Test delta
-    default : pValue = h_data->Chi2Test(h_model,"UW");      break; // Chi2Test delta
+                  h_data->FindBin(fit_range.emax) - h_data->FindBin(fit_range.emin) - 2
+                );                                          break; // default 7
   }
 
   return pValue;
