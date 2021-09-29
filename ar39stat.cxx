@@ -413,13 +413,15 @@ int main(int argc, char* argv[]) {
   TFile of((outdir+"/"+prefix+get_ofilename(toys,interpolate,channel,rebin,fit_range)).c_str(),"RECREATE");
   TTree tree("statTree", "statTree");
   std::vector<double> v_chi2(models.size());
-  int best_fccd = 0; double best_dlf = 0., best_activity = 0., gof = -1.;
+  int best_fccd = 0; double best_dlf = 0., best_activity = 0., gof = -1., model_int=0., data_int=0.;
   for (auto && m : models)
     tree.Branch(Form("chi2_%i_%03d",m.fccd,(int)(round(m.dlf*100))), &v_chi2.at(m.ID));
   tree.Branch("best_fccd",     &best_fccd     );
   tree.Branch("best_dlf",      &best_dlf      );
   tree.Branch("best_activity", &best_activity );
   tree.Branch("gof",           &gof           );
+  tree.Branch("model_int",     &model_int     );
+  tree.Branch("data_int",      &data_int      );
 
   auto min_llh = std::begin(v_chi2);
 
