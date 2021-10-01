@@ -278,9 +278,6 @@ int main(int argc, char* argv[]) {
   }
   fin.Close();
 
-  // Checkpoint
-  if (verbose) std::cout << "Checkpoint alpha" << std::endl;
-
   // load model histograms
   for (auto && m : models) {
     std::string mname = Form("model_fccd%d_dlf%03d",m.fccd,(int)round(m.dlf*100));
@@ -317,9 +314,6 @@ int main(int argc, char* argv[]) {
     m.chi2.resize(v_data.size());
   }
 
-  // Checkpoint
-  if (verbose) std::cout << "Checkpoint bravo" << std::endl;
-
   // Write model histograms
   if (interpolate) {
     TFile ofh((outdir+"/models_"+prefix+get_ofilename(toys,interpolate,channel,rebin,fit_range)).c_str(),"RECREATE");
@@ -346,9 +340,6 @@ int main(int argc, char* argv[]) {
     cm_dlf->Write();
     ofh.Close();
   }
-
-  // Checkpoint
-  if (verbose) std::cout << "Checkpoint charlie" << std::endl;
 
   progressbar bar(toys ? v_data.size() : models.size());
   bar.set_done_char("-");
@@ -406,9 +397,6 @@ int main(int argc, char* argv[]) {
   }
   std::cout << "\n";
 
-  // Checkpoint
-  if (verbose) std::cout << "Checkpoint delta" << std::endl;
-
   system(Form("mkdir -p %s",outdir.c_str()));
   TFile of((outdir+"/"+prefix+get_ofilename(toys,interpolate,channel,rebin,fit_range)).c_str(),"RECREATE");
   TTree tree("statTree", "statTree");
@@ -463,13 +451,10 @@ int main(int argc, char* argv[]) {
   tree.Write();
   of.Close();
 
-  // Checkpoint
-  if (verbose) std::cout << "Checkpoint echo" << std::endl;
-
   // some useful output
   if (!toys) {
     TFile ofh((outdir+"/bestfit_"+prefix+get_ofilename(toys,interpolate,channel,rebin,fit_range)).c_str(),"RECREATE");
-
+/*
     // Canvas with data, best model and range in DLF
     TCanvas * c1 = new TCanvas("c_dlf","c_dlf",1000,500);
     scale_TH1D_to_integral(v_data.at(0), fit_range);
@@ -506,10 +491,13 @@ int main(int argc, char* argv[]) {
       hm->Draw("hist same");
     }
     c2->Write("best_fit_fccd");
-
-    TParameter<int>    p_best_fccd("best_fccd", best_fccd);
-    TParameter<double> p_best_dlf ("best_dlf",  best_dlf );
-    TParameter<double> p_gof      ("gof",       gof      );
+*/
+    TParameter<int>    p_best_fccd     ("best_fccd",     best_fccd     );
+    TParameter<double> p_best_dlf      ("best_dlf",      best_dlf      );
+    TParameter<int>    p_integral_model("integral_model",integral_model);
+    TParameter<double> p_integral_data ("integral_data", integral_data );
+    TParameter<int>    p_best_activity ("best_activity", best_activity );
+    TParameter<double> p_gof           ("gof",           gof           );
     p_best_fccd.Write();
     p_best_dlf.Write();
     p_gof.Write();
@@ -528,15 +516,9 @@ int main(int argc, char* argv[]) {
     ofh.Close();
   }
 
-  // Checkpoint
-  if (verbose) std::cout << "Checkpoint foxtrot" << std::endl;
-
   // model and data histograms are not needed anymore at this point
   for (auto && m : models) { delete m.hist; m.hist = nullptr; }
   for (auto && d : v_data) { delete d; d = nullptr; }
-
-  // Checkpoint
-  if (verbose) std::cout << "Checkpoint golf" << std::endl;
 
   return 0;
 }
