@@ -500,6 +500,9 @@ int main(int argc, char* argv[]) {
     TParameter<double> p_gof           ("gof",           gof           );
     p_best_fccd.Write();
     p_best_dlf.Write();
+    p_integral_model.Write();
+    p_integral_data.Write();
+    p_best_activity.Write();
     p_gof.Write();
 
     // Canvas with TS profile
