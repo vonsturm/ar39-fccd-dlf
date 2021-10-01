@@ -423,6 +423,8 @@ int main(int argc, char* argv[]) {
   tree.Branch("integral_model",&integral_model);
   tree.Branch("integral_data", &integral_data );
   tree.Branch("gof",           &gof           );
+  tree.Branch("model_int",     &model_int     );
+  tree.Branch("data_int",      &data_int      );
 
   auto min_llh = std::begin(v_chi2);
 
