@@ -413,12 +413,15 @@ int main(int argc, char* argv[]) {
   TFile of((outdir+"/"+prefix+get_ofilename(toys,interpolate,channel,rebin,fit_range)).c_str(),"RECREATE");
   TTree tree("statTree", "statTree");
   std::vector<double> v_chi2(models.size());
-  int best_fccd = 0; double best_dlf = 0., best_activity = 0., gof = -1.;
+  int best_fccd = 0;
+  double best_dlf = 0., best_activity = 0., gof = -1., integral_data = 0., integral_model = 0.;
   for (auto && m : models)
     tree.Branch(Form("chi2_%i_%03d",m.fccd,(int)(round(m.dlf*100))), &v_chi2.at(m.ID));
   tree.Branch("best_fccd",     &best_fccd     );
   tree.Branch("best_dlf",      &best_dlf      );
   tree.Branch("best_activity", &best_activity );
+  tree.Branch("integral_model",&integral_model);
+  tree.Branch("integral_data", &integral_data );
   tree.Branch("gof",           &gof           );
 
   auto min_llh = std::begin(v_chi2);
@@ -442,9 +445,15 @@ int main(int argc, char* argv[]) {
     // calculate activity for best fit model
     // primaries / (LT[s] * Volume[cm3] * Density[g/cm3] / 1000[g/kg])
     double sim_act = 1.e12 / (37032.160 * 188400 * 1.39);
-    double model_int = best_model.hist->Integral(fit_range.emin, fit_range.emax);
-    double data_int  = v_data.at(i)   ->Integral(fit_range.emin, fit_range.emax);
-    best_activity = sim_act * data_int/model_int;
+    integral_model = best_model.hist->Integral(
+      best_model.hist->FindBin(fit_range.emin),
+      best_model.hist->FindBin(fit_range.emax)
+    );
+    integral_data  = v_data.at(i)   ->Integral(
+      v_data.at(i)->FindBin(fit_range.emin),
+      v_data.at(i)->FindBin(fit_range.emax)
+    );
+    best_activity = sim_act * integral_data/integral_model;
     //gof = v_data.at(i)->Chi2Test(best_model.hist, "UW CHI2/NDF");
     //gof = v_data.at(i)->Chi2Test(best_model.hist, "UW");
     gof = CalcPValue(teststat,v_data.at(i),best_model.hist,fit_range,use_fixed_activity,activity);
@@ -460,7 +469,7 @@ int main(int argc, char* argv[]) {
   // some useful output
   if (!toys) {
     TFile ofh((outdir+"/bestfit_"+prefix+get_ofilename(toys,interpolate,channel,rebin,fit_range)).c_str(),"RECREATE");
-/*
+
     // Canvas with data, best model and range in DLF
     TCanvas * c1 = new TCanvas("c_dlf","c_dlf",1000,500);
     scale_TH1D_to_integral(v_data.at(0), fit_range);
@@ -468,7 +477,9 @@ int main(int argc, char* argv[]) {
     v_data.at(0)->Draw("hist");
     std::vector<TH1D*> v_hm_dlf;
     for (int i = -2; i < 3; i++) {
-      v_hm_dlf.push_back( models.at(min_llh-std::begin(v_chi2)+i).hist );
+      int index = min_llh-std::begin(v_chi2)+i;
+      if (index>=0) v_hm_dlf.push_back( models.at(index).hist );
+      else          continue;
       if (i==0) v_hm_dlf.back()->SetLineColor(kRed);
       else      v_hm_dlf.back()->SetLineColor(kGreen+1);
     }
@@ -484,7 +495,9 @@ int main(int argc, char* argv[]) {
     std::vector<TH1D*> v_hm_fccd;
     int delta_fccd = (fccd_stop-fccd_start)/fccd_step+1;
     for (int i = -2; i < 3; i++) {
-      v_hm_fccd.push_back( models.at(min_llh-std::begin(v_chi2)+i*delta_fccd).hist );
+      int index = min_llh-std::begin(v_chi2)+i*delta_fccd;
+      if (index>=0) v_hm_fccd.push_back( models.at(index).hist );
+      else          continue;
       if (i==0) v_hm_fccd.back()->SetLineColor(kRed);
       else      v_hm_fccd.back()->SetLineColor(kGreen+1);
     }
@@ -493,7 +506,7 @@ int main(int argc, char* argv[]) {
       hm->Draw("hist same");
     }
     c2->Write("best_fit_fccd");
-*/
+
     TParameter<int>    p_best_fccd("best_fccd", best_fccd);
     TParameter<double> p_best_dlf ("best_dlf",  best_dlf );
     TParameter<double> p_gof      ("gof",       gof      );
